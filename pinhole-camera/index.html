@@ -310,36 +310,53 @@ function sceneCheckerboard() {
 }
 
 function sceneHouse() {
-  const W=2.6, H=2.0, D=3.4, rH=1.1;
+  const W=2.6, H=1.8, D=3.4, rH=1.0, yo=-0.5;  // yo shifts house down so roof fits in default view
   const hw=W/2, hh=H/2, hd=D/2;
-  // Box corners — B/T=bottom/top, F/R=front(near)/rear(far), L/R=left/right
-  const BFL=[-hw,-hh,-hd], BFR=[hw,-hh,-hd], BRL=[-hw,-hh,hd], BRR=[hw,-hh,hd];
-  const TFL=[-hw, hh,-hd], TFR=[hw, hh,-hd], TRL=[-hw, hh,hd], TRR=[hw, hh,hd];
-  const RF=[0,hh+rH,-hd], RR=[0,hh+rH,hd];  // ridge front / back
+  // Box corners: B/T=bottom/top, F/Rear=front(near)/rear(far), L/R=left/right
+  const BFL=[-hw,yo-hh,-hd], BFR=[hw,yo-hh,-hd], BRL=[-hw,yo-hh,hd], BRR=[hw,yo-hh,hd];
+  const TFL=[-hw,yo+hh,-hd], TFR=[hw,yo+hh,-hd], TRL=[-hw,yo+hh,hd], TRR=[hw,yo+hh,hd];
+  const RF=[0,yo+hh+rH,-hd], RR=[0,yo+hh+rH,hd];  // ridge front / back
 
-  // Door on front face (offset left of center for asymmetry)
-  const dz=-hd-0.001, dw=0.38, dh=0.82, dx=-0.3;
-  const DL=[dx-dw,-hh,dz], DR=[dx+dw,-hh,dz], DTL=[dx-dw,-hh+dh,dz], DTR=[dx+dw,-hh+dh,dz];
+  // Door offset left of center for asymmetry
+  const dz=-hd-0.001, dw=0.35, dh=0.75, dx=-0.3;
+  const DL=[dx-dw,yo-hh,dz], DR=[dx+dw,yo-hh,dz], DTL=[dx-dw,yo-hh+dh,dz], DTR=[dx+dw,yo-hh+dh,dz];
+
+  // Edge lines for wireframe visibility in world view
+  const ec='#ccc', ew=1;
+  const lines=[
+    // Box edges
+    {a:BFL,b:BFR,color:ec,lw:ew},{a:BFR,b:BRR,color:ec,lw:ew},
+    {a:BRR,b:BRL,color:ec,lw:ew},{a:BRL,b:BFL,color:ec,lw:ew},
+    {a:TFL,b:TFR,color:ec,lw:ew},{a:TFR,b:TRR,color:ec,lw:ew},
+    {a:TRR,b:TRL,color:ec,lw:ew},{a:TRL,b:TFL,color:ec,lw:ew},
+    {a:BFL,b:TFL,color:ec,lw:ew},{a:BFR,b:TFR,color:ec,lw:ew},
+    {a:BRR,b:TRR,color:ec,lw:ew},{a:BRL,b:TRL,color:ec,lw:ew},
+    // Roof edges
+    {a:TFL,b:RF,color:ec,lw:ew},{a:TFR,b:RF,color:ec,lw:ew},
+    {a:TRL,b:RR,color:ec,lw:ew},{a:TRR,b:RR,color:ec,lw:ew},
+    {a:RF,b:RR,color:ec,lw:ew},
+    ...axisLines(3),
+  ];
 
   const quads=[
     // Floor
-    {verts:[BFL,BFR,BRR,BRL], fill:'#5a4a3a', stroke:'#3a2a1a'},
+    {verts:[BFL,BFR,BRR,BRL], fill:'#5a4a3a', stroke:null},
     // Walls
-    {verts:[BFL,BFR,TFR,TFL], fill:'#c4a882', stroke:'#8a6040'},  // front
-    {verts:[BRR,BRL,TRL,TRR], fill:'#b09070', stroke:'#7a5030'},  // back
-    {verts:[BFL,BRL,TRL,TFL], fill:'#b89868', stroke:'#806040'},  // left
-    {verts:[BFR,BRR,TRR,TFR], fill:'#bfa070', stroke:'#886040'},  // right
+    {verts:[BFL,BFR,TFR,TFL], fill:'#c4a882', stroke:null},  // front
+    {verts:[BRR,BRL,TRL,TRR], fill:'#b09070', stroke:null},  // back
+    {verts:[BFL,BRL,TRL,TFL], fill:'#b89868', stroke:null},  // left
+    {verts:[BFR,BRR,TRR,TFR], fill:'#bfa070', stroke:null},  // right
     // Door
-    {verts:[DL,DR,DTR,DTL],   fill:'#5c3320', stroke:'#2a1000'},
+    {verts:[DL,DR,DTR,DTL],   fill:'#5c3320', stroke:null},
     // Roof slopes
-    {verts:[TFL,TRL,RR,RF],   fill:'#8b2020', stroke:'#601010'},  // left slope
-    {verts:[TFR,RF,RR,TRR],   fill:'#a02828', stroke:'#701818'},  // right slope
+    {verts:[TFL,TRL,RR,RF],   fill:'#8b2020', stroke:null},  // left slope
+    {verts:[TFR,RF,RR,TRR],   fill:'#a02828', stroke:null},  // right slope
     // Gables (triangles as degenerate quads)
-    {verts:[TFL,TFR,RF,RF],   fill:'#c09878', stroke:'#8a6040'},  // front gable
-    {verts:[TRL,RR,TRR,TRR],  fill:'#ae9068', stroke:'#7a5030'},  // back gable
+    {verts:[TFL,TFR,RF,RF],   fill:'#c09878', stroke:null},  // front gable
+    {verts:[TRL,RR,TRR,TRR],  fill:'#ae9068', stroke:null},  // back gable
   ];
 
-  return { lines:axisLines(3.5), quads, pts:[] };
+  return { lines, quads, pts:[] };
 }
 
 function getScene() {
