@@ -317,10 +317,6 @@ function sceneHouse() {
   const TFL=[-hw,yo+hh,-hd], TFR=[hw,yo+hh,-hd], TRL=[-hw,yo+hh,hd], TRR=[hw,yo+hh,hd];
   const RF=[0,yo+hh+rH,-hd], RR=[0,yo+hh+rH,hd];  // ridge front / back
 
-  // Door offset left of center for asymmetry
-  const dz=-hd-0.001, dw=0.35, dh=0.75, dx=-0.3;
-  const DL=[dx-dw,yo-hh,dz], DR=[dx+dw,yo-hh,dz], DTL=[dx-dw,yo-hh+dh,dz], DTR=[dx+dw,yo-hh+dh,dz];
-
   // Edge lines for wireframe visibility in world view
   const ec='#ccc', ew=1;
   const lines=[
@@ -346,8 +342,6 @@ function sceneHouse() {
     {verts:[BRR,BRL,TRL,TRR], fill:'#b09070', stroke:null},  // back
     {verts:[BFL,BRL,TRL,TFL], fill:'#b89868', stroke:null},  // left
     {verts:[BFR,BRR,TRR,TFR], fill:'#bfa070', stroke:null},  // right
-    // Door
-    {verts:[DL,DR,DTR,DTL],   fill:'#5c3320', stroke:null},
     // Roof slopes
     {verts:[TFL,TRL,RR,RF],   fill:'#8b2020', stroke:null},  // left slope
     {verts:[TFR,RF,RR,TRR],   fill:'#a02828', stroke:null},  // right slope
