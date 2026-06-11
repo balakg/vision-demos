@@ -103,8 +103,7 @@
       <div class="section-title">Scene</div>
       <select id="scene-select">
         <option value="checkerboard">Checkerboard + Axes</option>
-        <option value="cube">Cube + Axes</option>
-        <option value="room">Room / Corridor</option>
+        <option value="house">House</option>
       </select>
     </div>
 
@@ -310,59 +309,41 @@ function sceneCheckerboard() {
   return { lines:axisLines(3), quads, pts:[] };
 }
 
-function sceneCube() {
-  const s=1.5;
-  const v=[[-s,-s,-s],[s,-s,-s],[s,s,-s],[-s,s,-s],[-s,-s,s],[s,-s,s],[s,s,s],[-s,s,s]];
-  const edges=[[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
-  // Face quads
-  const faces=[
-    {verts:[v[4],v[5],v[6],v[7]],fill:'rgba(88,166,255,0.18)',stroke:'#58a6ff'},   // front
-    {verts:[v[0],v[1],v[2],v[3]],fill:'rgba(88,166,255,0.08)',stroke:'#2255aa'},   // back
-    {verts:[v[1],v[5],v[6],v[2]],fill:'rgba(63,185,80,0.15)',stroke:'#3fb950'},    // right
-    {verts:[v[0],v[4],v[7],v[3]],fill:'rgba(63,185,80,0.08)',stroke:'#1a7a30'},    // left
-    {verts:[v[0],v[1],v[5],v[4]],fill:'rgba(248,81,73,0.15)',stroke:'#f85149'},    // top
-    {verts:[v[3],v[2],v[6],v[7]],fill:'rgba(248,81,73,0.08)',stroke:'#882020'},    // bottom
-  ];
-  const lines=[...edges.map(([i,j])=>({a:v[i],b:v[j],color:'#aaa',lw:1})), ...axisLines(3.5)];
-  return { lines, quads:faces, pts:[] };
-}
+function sceneHouse() {
+  const W=2.6, H=2.0, D=3.4, rH=1.1;
+  const hw=W/2, hh=H/2, hd=D/2;
+  // Box corners — B/T=bottom/top, F/R=front(near)/rear(far), L/R=left/right
+  const BFL=[-hw,-hh,-hd], BFR=[hw,-hh,-hd], BRL=[-hw,-hh,hd], BRR=[hw,-hh,hd];
+  const TFL=[-hw, hh,-hd], TFR=[hw, hh,-hd], TRL=[-hw, hh,hd], TRR=[hw, hh,hd];
+  const RF=[0,hh+rH,-hd], RR=[0,hh+rH,hd];  // ridge front / back
 
-function sceneRoom() {
-  const [W,H,D]=[3,2,7];
-  const lines=[], quads=[];
-  // Grid lines — floor (y=H) and ceiling (y=-H)
-  for(let x=-W;x<=W;x++) {
-    lines.push({a:[x,-H,0],b:[x,-H,D],color:'#1e2a1e',lw:0.5});
-    lines.push({a:[x, H,0],b:[x, H,D],color:'#1e2a1e',lw:0.5});
-  }
-  for(let z=0;z<=D;z++) {
-    lines.push({a:[-W,-H,z],b:[W,-H,z],color:'#1e2a1e',lw:0.5});
-    lines.push({a:[-W, H,z],b:[W, H,z],color:'#1e2a1e',lw:0.5});
-  }
-  // Side wall grids
-  for(let y=-H;y<=H;y++) {
-    lines.push({a:[-W,y,0],b:[-W,y,D],color:'#1e2030',lw:0.5});
-    lines.push({a:[ W,y,0],b:[ W,y,D],color:'#1e2030',lw:0.5});
-  }
-  for(let z=0;z<=D;z++) {
-    lines.push({a:[-W,-H,z],b:[-W,H,z],color:'#1e2030',lw:0.5});
-    lines.push({a:[ W,-H,z],b:[ W,H,z],color:'#1e2030',lw:0.5});
-  }
-  // Frame edges
-  [
-    [[-W,-H,0],[W,-H,0]],[[W,-H,0],[W,H,0]],[[W,H,0],[-W,H,0]],[[-W,H,0],[-W,-H,0]],
-    [[-W,-H,D],[W,-H,D]],[[W,-H,D],[W,H,D]],[[W,H,D],[-W,H,D]],[[-W,H,D],[-W,-H,D]],
-    [[-W,-H,0],[-W,-H,D]],[[W,-H,0],[W,-H,D]],[[W,H,0],[W,H,D]],[[-W,H,0],[-W,H,D]],
-  ].forEach(([a,b])=>lines.push({a,b,color:'#555',lw:1}));
-  // Colored corner pillars
-  [[-W,-H,'#e74c3c'],[W,-H,'#f39c12'],[W,H,'#2ecc71'],[-W,H,'#3498db']].forEach(([x,y,c])=>{
-    lines.push({a:[x,y,0],b:[x,y,D],color:c,lw:3});
-  });
-  return { lines:[...lines,...axisLines(1.5)], quads, pts:[] };
+  // Door on front face (offset left of center for asymmetry)
+  const dz=-hd-0.001, dw=0.38, dh=0.82, dx=-0.3;
+  const DL=[dx-dw,-hh,dz], DR=[dx+dw,-hh,dz], DTL=[dx-dw,-hh+dh,dz], DTR=[dx+dw,-hh+dh,dz];
+
+  const quads=[
+    // Floor
+    {verts:[BFL,BFR,BRR,BRL], fill:'#5a4a3a', stroke:'#3a2a1a'},
+    // Walls
+    {verts:[BFL,BFR,TFR,TFL], fill:'#c4a882', stroke:'#8a6040'},  // front
+    {verts:[BRR,BRL,TRL,TRR], fill:'#b09070', stroke:'#7a5030'},  // back
+    {verts:[BFL,BRL,TRL,TFL], fill:'#b89868', stroke:'#806040'},  // left
+    {verts:[BFR,BRR,TRR,TFR], fill:'#bfa070', stroke:'#886040'},  // right
+    // Door
+    {verts:[DL,DR,DTR,DTL],   fill:'#5c3320', stroke:'#2a1000'},
+    // Roof slopes
+    {verts:[TFL,TRL,RR,RF],   fill:'#8b2020', stroke:'#601010'},  // left slope
+    {verts:[TFR,RF,RR,TRR],   fill:'#a02828', stroke:'#701818'},  // right slope
+    // Gables (triangles as degenerate quads)
+    {verts:[TFL,TFR,RF,RF],   fill:'#c09878', stroke:'#8a6040'},  // front gable
+    {verts:[TRL,RR,TRR,TRR],  fill:'#ae9068', stroke:'#7a5030'},  // back gable
+  ];
+
+  return { lines:axisLines(3.5), quads, pts:[] };
 }
 
 function getScene() {
-  return ({checkerboard:sceneCheckerboard,cube:sceneCube,room:sceneRoom}[P.scene]||sceneCheckerboard)();
+  return ({checkerboard:sceneCheckerboard,house:sceneHouse}[P.scene]||sceneCheckerboard)();
 }
 
 // =============================================================
