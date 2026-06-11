@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pinhole Camera Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0d1117; color: #e6edf3; font-family: 'Segoe UI', system-ui, sans-serif; font-size: 13px; overflow: hidden; height: 100vh; }
+
+    #app { display: flex; height: 100vh; }
+
+    #controls {
+      width: 285px; min-width: 285px;
+      background: #161b22; padding: 14px;
+      overflow-y: auto; border-right: 1px solid #30363d;
+      display: flex; flex-direction: column; gap: 11px;
+    }
+    #controls h1 { font-size: 15px; font-weight: 700; color: #f0f6fc; }
+
+    .section-title {
+      font-size: 10px; font-weight: 700; color: #8b949e;
+      text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 7px;
+    }
+
+    select {
+      width: 100%; background: #21262d; color: #e6edf3;
+      border: 1px solid #30363d; border-radius: 4px;
+      padding: 5px 8px; font-size: 12px; cursor: pointer;
+    }
+
+    .slider-row { margin-bottom: 5px; }
+    .slider-label { display: flex; justify-content: space-between; margin-bottom: 2px; font-size: 12px; }
+    .slider-name { color: #c9d1d9; }
+    .slider-val  { color: #58a6ff; font-family: monospace; min-width: 44px; text-align: right; }
+    input[type=range] { width: 100%; height: 4px; accent-color: #58a6ff; cursor: pointer; }
+
+    .derived-note {
+      font-size: 10px; color: #8b949e; font-family: monospace;
+      background: #0d1117; border: 1px solid #30363d; border-radius: 3px;
+      padding: 4px 7px; margin-top: 2px; line-height: 1.6;
+    }
+    .dn-val { color: #58a6ff; }
+
+    .matrix-box {
+      background: #0d1117; border: 1px solid #30363d;
+      border-radius: 4px; padding: 8px 6px;
+      font-family: monospace; font-size: 11px;
+    }
+    .matrix-subtitle { color: #8b949e; font-size: 10px; margin-bottom: 4px; }
+    .mrow { display: flex; justify-content: center; gap: 2px; margin: 1px 0; }
+    .mc   { width: 52px; text-align: right; color: #58a6ff; }
+    .mc-t { color: #f85149; }
+    .mbracket { color: #555; font-size: 22px; line-height: 1.0; display: flex; align-items: center; }
+
+    .equation-box {
+      background: #0d1117; border: 1px solid #30363d;
+      border-radius: 4px; padding: 8px 10px;
+      font-size: 11px; line-height: 2.0; color: #8b949e;
+    }
+    .eq-blue  { color: #58a6ff; }
+    .eq-green { color: #3fb950; }
+    .eq-yellow { color: #e3b341; }
+
+    .reset-btn {
+      width: 100%; padding: 6px; background: #21262d; color: #c9d1d9;
+      border: 1px solid #30363d; border-radius: 4px; cursor: pointer; font-size: 12px;
+    }
+    .reset-btn:hover { background: #30363d; }
+
+    #views { flex: 1; display: flex; gap: 10px; padding: 10px; min-width: 0; }
+
+    .view-box {
+      flex: 1; display: flex; flex-direction: column;
+      background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+      overflow: hidden; min-width: 0;
+    }
+    .view-title {
+      padding: 6px 10px; font-size: 10px; font-weight: 700; color: #8b949e;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      border-bottom: 1px solid #30363d; flex-shrink: 0;
+    }
+    .canvas-wrap {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: #0d1117; overflow: hidden; gap: 6px;
+    }
+    canvas { display: block; }
+    .img-size-label {
+      font-size: 10px; font-family: monospace; color: #444;
+    }
+    .img-size-label span { color: #58a6ff; }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ===== CONTROLS ===== -->
+  <div id="controls">
+    <h1>📷 Pinhole Camera</h1>
+
+    <div>
+      <div class="section-title">Scene</div>
+      <select id="scene-select">
+        <option value="checkerboard">Checkerboard + Axes</option>
+        <option value="cube">Cube + Axes</option>
+        <option value="room">Room / Corridor</option>
+      </select>
+    </div>
+
+    <div>
+      <div class="section-title">Intrinsics — Focal Length</div>
+      <div class="slider-row">
+        <div class="slider-label"><span class="slider-name">f  (focal length)</span><span class="slider-val" id="v-f">500</span></div>
+        <input type="range" id="s-f" min="50" max="1500" value="500" step="10">
+      </div>
+      <div class="slider-row">
+        <div class="slider-label"><span class="slider-name">s<sub>x</sub>  (pixel scale x)</span><span class="slider-val" id="v-sx">1.00</span></div>
+        <input type="range" id="s-sx" min="0.3" max="3.0" value="1.0" step="0.05">
+      </div>
+      <div class="slider-row">
+        <div class="slider-label"><span class="slider-name">s<sub>y</sub>  (pixel scale y)</span><span class="slider-val" id="v-sy">1.00</span></div>
+        <input type="range" id="s-sy" min="0.3" max="3.0" value="1.0" step="0.05">
+      </div>
+      <div class="derived-note" id="derived-note">
+        f<sub>x</sub> = f·s<sub>x</sub> = <span class="dn-val" id="dn-fx">500</span> &nbsp;|&nbsp;
+        f<sub>y</sub> = f·s<sub>y</sub> = <span class="dn-val" id="dn-fy">500</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">Intrinsics — Image Size</div>
+      <div class="slider-row">
+        <div class="slider-label"><span class="slider-name">c<sub>x</sub> = W/2  (half-width)</span><span class="slider-val" id="v-cx">320</span></div>
+        <input type="range" id="s-cx" min="80" max="560" value="320" step="5">
+      </div>
+      <div class="slider-row">
+        <div class="slider-label"><span class="slider-name">c<sub>y</sub> = H/2  (half-height)</span><span class="slider-val" id="v-cy">240</span></div>
+        <input type="range" id="s-cy" min="60" max="420" value="240" step="5">
+      </div>
+      <div class="derived-note">
+        Image size: <span class="dn-val" id="dn-iw">640</span> × <span class="dn-val" id="dn-ih">480</span> px
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">Extrinsics — Translation</div>
+      <div class="slider-row">
+        <div class="slider-label"><span class="slider-name">t<sub>x</sub></span><span class="slider-val" id="v-tx">0.0</span></div>
+        <input type="range" id="s-tx" min="-5" max="5" value="0" step="0.1">
+      </div>
+      <div class="slider-row">
+        <div class="slider-label"><span class="slider-name">t<sub>y</sub></span><span class="slider-val" id="v-ty">0.0</span></div>
+        <input type="range" id="s-ty" min="-5" max="5" value="0" step="0.1">
+      </div>
+      <div class="slider-row">
+        <div class="slider-label"><span class="slider-name">t<sub>z</sub>  (depth)</span><span class="slider-val" id="v-tz">6.0</span></div>
+        <input type="range" id="s-tz" min="1" max="20" value="6" step="0.1">
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">Extrinsics — Rotation (degrees)</div>
+      <div class="slider-row">
+        <div class="slider-label"><span class="slider-name">R<sub>x</sub>  (tilt up/down)</span><span class="slider-val" id="v-rx">0</span></div>
+        <input type="range" id="s-rx" min="-80" max="80" value="0" step="1">
+      </div>
+      <div class="slider-row">
+        <div class="slider-label"><span class="slider-name">R<sub>y</sub>  (pan left/right)</span><span class="slider-val" id="v-ry">0</span></div>
+        <input type="range" id="s-ry" min="-80" max="80" value="0" step="1">
+      </div>
+      <div class="slider-row">
+        <div class="slider-label"><span class="slider-name">R<sub>z</sub>  (roll)</span><span class="slider-val" id="v-rz">0</span></div>
+        <input type="range" id="s-rz" min="-80" max="80" value="0" step="1">
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">Camera Matrix K</div>
+      <div class="matrix-box" id="matrix-K"></div>
+    </div>
+
+    <div>
+      <div class="section-title">Projection</div>
+      <div class="equation-box">
+        λ[u,v,1]ᵀ = <span class="eq-blue">K</span>[<span class="eq-green">R</span>|<span class="eq-green">t</span>][X,Y,Z,1]ᵀ<br>
+        u = <span class="eq-blue">f<sub>x</sub></span>·(X'/Z') + <span class="eq-blue">c<sub>x</sub></span><br>
+        v = <span class="eq-blue">f<sub>y</sub></span>·(Y'/Z') + <span class="eq-blue">c<sub>y</sub></span><br>
+        <span class="eq-yellow">f<sub>x</sub>=f·s<sub>x</sub>,  f<sub>y</sub>=f·s<sub>y</sub></span><br>
+        W = 2c<sub>x</sub>,  H = 2c<sub>y</sub>
+      </div>
+    </div>
+
+    <button class="reset-btn" onclick="resetAll()">↺ Reset</button>
+  </div>
+
+  <!-- ===== CANVAS VIEWS ===== -->
+  <div id="views">
+    <div class="view-box">
+      <div class="view-title">World View</div>
+      <div class="canvas-wrap"><canvas id="wc"></canvas></div>
+    </div>
+    <div class="view-box">
+      <div class="view-title">Image Plane</div>
+      <div class="canvas-wrap">
+        <canvas id="ic"></canvas>
+        <div class="img-size-label">W = 2c<sub>x</sub> = <span id="lbl-w">640</span> px &nbsp;|&nbsp; H = 2c<sub>y</sub> = <span id="lbl-h">480</span> px</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// =============================================================
+// STATE
+// =============================================================
+const DEFAULTS = { f:500, sx:1, sy:1, cx:320, cy:240, tx:0, ty:0, tz:6, rx:0, ry:0, rz:0, scene:'checkerboard' };
+let P = {...DEFAULTS};
+
+const getFx = () => P.f * P.sx;
+const getFy = () => P.f * P.sy;
+const getIW = () => Math.round(2 * P.cx);
+const getIH = () => Math.round(2 * P.cy);
+
+// =============================================================
+// MATH
+// =============================================================
+const d2r = d => d * Math.PI / 180;
+
+function Rx(deg) { const [c,s]=[Math.cos(d2r(deg)),Math.sin(d2r(deg))]; return [[1,0,0],[0,c,-s],[0,s,c]]; }
+function Ry(deg) { const [c,s]=[Math.cos(d2r(deg)),Math.sin(d2r(deg))]; return [[c,0,s],[0,1,0],[-s,0,c]]; }
+function Rz(deg) { const [c,s]=[Math.cos(d2r(deg)),Math.sin(d2r(deg))]; return [[c,-s,0],[s,c,0],[0,0,1]]; }
+
+function mmul(A,B) {
+  const C=[[0,0,0],[0,0,0],[0,0,0]];
+  for(let i=0;i<3;i++) for(let j=0;j<3;j++) for(let k=0;k<3;k++) C[i][j]+=A[i][k]*B[k][j];
+  return C;
+}
+function mv(M,v) {
+  return [M[0][0]*v[0]+M[0][1]*v[1]+M[0][2]*v[2],
+          M[1][0]*v[0]+M[1][1]*v[1]+M[1][2]*v[2],
+          M[2][0]*v[0]+M[2][1]*v[1]+M[2][2]*v[2]];
+}
+function transp(M) { return [[M[0][0],M[1][0],M[2][0]],[M[0][1],M[1][1],M[2][1]],[M[0][2],M[1][2],M[2][2]]]; }
+const norm  = v => { const l=Math.hypot(...v); return v.map(x=>x/l); };
+const cross = (a,b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+const dot   = (a,b) => a.reduce((s,x,i)=>s+x*b[i],0);
+const sub3  = (a,b) => a.map((x,i)=>x-b[i]);
+
+function getR() { return mmul(Rz(P.rz), mmul(Ry(P.ry), Rx(P.rx))); }
+function camCenter() { const RT=transp(getR()); return mv(RT,[-P.tx,-P.ty,-P.tz]); }
+
+// =============================================================
+// PROJECTION
+// =============================================================
+function w2cam(pw) {
+  const R=getR();
+  return [R[0][0]*pw[0]+R[0][1]*pw[1]+R[0][2]*pw[2]+P.tx,
+          R[1][0]*pw[0]+R[1][1]*pw[1]+R[1][2]*pw[2]+P.ty,
+          R[2][0]*pw[0]+R[2][1]*pw[1]+R[2][2]*pw[2]+P.tz];
+}
+function cam2img(pc) {
+  if (pc[2]<0.01) return null;
+  return { u: getFx()*pc[0]/pc[2]+P.cx, v: getFy()*pc[1]/pc[2]+P.cy, z: pc[2] };
+}
+function projPt(pw) { return cam2img(w2cam(pw)); }
+
+function projLine(a,b) {
+  const ca=w2cam(a), cb=w2cam(b), EPS=0.01;
+  if (ca[2]<=EPS && cb[2]<=EPS) return null;
+  let pa=ca, pb=cb;
+  if (pa[2]<=EPS) { const t=(EPS-ca[2])/(cb[2]-ca[2]); pa=ca.map((x,i)=>x+t*(cb[i]-x)); }
+  else if (pb[2]<=EPS) { const t=(EPS-cb[2])/(ca[2]-cb[2]); pb=cb.map((x,i)=>x+t*(ca[i]-x)); }
+  const ia=cam2img(pa), ib=cam2img(pb);
+  return (ia&&ib) ? [ia,ib] : null;
+}
+
+// =============================================================
+// SCENES
+// =============================================================
+function axisLines(len) {
+  return [{a:[0,0,0],b:[len,0,0],color:'#e74c3c',lw:2.5},
+          {a:[0,0,0],b:[0,len,0],color:'#2ecc71',lw:2.5},
+          {a:[0,0,0],b:[0,0,len],color:'#3498db',lw:2.5}];
+}
+
+// 4-quadrant colored checkerboard (colors map to image TL/TR/BL/BR)
+// world Y < 0 → appears top in image (v < cy); Y > 0 → bottom (v > cy)
+// world X < 0 → left; X > 0 → right
+function sceneCheckerboard() {
+  const N=8, cs=0.5, h=N*cs/2;
+  const quads=[];
+  // Quadrant palette [dark, light]
+  const pal=[
+    ['#1a3a7a','#4f8fdd'],  // TL: blue  (world X<0, Y<0 → image top-left)
+    ['#7a1a1a','#d45050'],  // TR: red   (world X>0, Y<0 → image top-right)
+    ['#1e561e','#55aa55'],  // BL: green (world X<0, Y>0 → image bottom-left)
+    ['#6b4700','#cc9922'],  // BR: amber (world X>0, Y>0 → image bottom-right)
+  ];
+  for (let i=0;i<N;i++) for (let j=0;j<N;j++) {
+    const [x0,y0]=[i*cs-h, j*cs-h];
+    // world Y: y0+cs/2. Negative world Y → top in image
+    const topHalf = (y0+cs/2) < 0;
+    const rightHalf = (x0+cs/2) >= 0;
+    const qi = (rightHalf?1:0) + (topHalf?0:2);
+    const dark = (i+j)%2===0;
+    quads.push({ verts:[[x0,y0,0],[x0+cs,y0,0],[x0+cs,y0+cs,0],[x0,y0+cs,0]],
+                 fill:pal[qi][dark?0:1], stroke:'#2228' });
+  }
+  return { lines:axisLines(3), quads, pts:[] };
+}
+
+function sceneCube() {
+  const s=1.5;
+  const v=[[-s,-s,-s],[s,-s,-s],[s,s,-s],[-s,s,-s],[-s,-s,s],[s,-s,s],[s,s,s],[-s,s,s]];
+  const edges=[[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
+  // Face quads
+  const faces=[
+    {verts:[v[4],v[5],v[6],v[7]],fill:'rgba(88,166,255,0.18)',stroke:'#58a6ff'},   // front
+    {verts:[v[0],v[1],v[2],v[3]],fill:'rgba(88,166,255,0.08)',stroke:'#2255aa'},   // back
+    {verts:[v[1],v[5],v[6],v[2]],fill:'rgba(63,185,80,0.15)',stroke:'#3fb950'},    // right
+    {verts:[v[0],v[4],v[7],v[3]],fill:'rgba(63,185,80,0.08)',stroke:'#1a7a30'},    // left
+    {verts:[v[0],v[1],v[5],v[4]],fill:'rgba(248,81,73,0.15)',stroke:'#f85149'},    // top
+    {verts:[v[3],v[2],v[6],v[7]],fill:'rgba(248,81,73,0.08)',stroke:'#882020'},    // bottom
+  ];
+  const lines=[...edges.map(([i,j])=>({a:v[i],b:v[j],color:'#aaa',lw:1})), ...axisLines(3.5)];
+  return { lines, quads:faces, pts:[] };
+}
+
+function sceneRoom() {
+  const [W,H,D]=[3,2,7];
+  const lines=[], quads=[];
+  // Grid lines — floor (y=H) and ceiling (y=-H)
+  for(let x=-W;x<=W;x++) {
+    lines.push({a:[x,-H,0],b:[x,-H,D],color:'#1e2a1e',lw:0.5});
+    lines.push({a:[x, H,0],b:[x, H,D],color:'#1e2a1e',lw:0.5});
+  }
+  for(let z=0;z<=D;z++) {
+    lines.push({a:[-W,-H,z],b:[W,-H,z],color:'#1e2a1e',lw:0.5});
+    lines.push({a:[-W, H,z],b:[W, H,z],color:'#1e2a1e',lw:0.5});
+  }
+  // Side wall grids
+  for(let y=-H;y<=H;y++) {
+    lines.push({a:[-W,y,0],b:[-W,y,D],color:'#1e2030',lw:0.5});
+    lines.push({a:[ W,y,0],b:[ W,y,D],color:'#1e2030',lw:0.5});
+  }
+  for(let z=0;z<=D;z++) {
+    lines.push({a:[-W,-H,z],b:[-W,H,z],color:'#1e2030',lw:0.5});
+    lines.push({a:[ W,-H,z],b:[ W,H,z],color:'#1e2030',lw:0.5});
+  }
+  // Frame edges
+  [
+    [[-W,-H,0],[W,-H,0]],[[W,-H,0],[W,H,0]],[[W,H,0],[-W,H,0]],[[-W,H,0],[-W,-H,0]],
+    [[-W,-H,D],[W,-H,D]],[[W,-H,D],[W,H,D]],[[W,H,D],[-W,H,D]],[[-W,H,D],[-W,-H,D]],
+    [[-W,-H,0],[-W,-H,D]],[[W,-H,0],[W,-H,D]],[[W,H,0],[W,H,D]],[[-W,H,0],[-W,H,D]],
+  ].forEach(([a,b])=>lines.push({a,b,color:'#555',lw:1}));
+  // Colored corner pillars
+  [[-W,-H,'#e74c3c'],[W,-H,'#f39c12'],[W,H,'#2ecc71'],[-W,H,'#3498db']].forEach(([x,y,c])=>{
+    lines.push({a:[x,y,0],b:[x,y,D],color:c,lw:3});
+  });
+  return { lines:[...lines,...axisLines(1.5)], quads, pts:[] };
+}
+
+function getScene() {
+  return ({checkerboard:sceneCheckerboard,cube:sceneCube,room:sceneRoom}[P.scene]||sceneCheckerboard)();
+}
+
+// =============================================================
+// CAMERA FRUSTUM (world view)
+// =============================================================
+function getFrustum() {
+  const RT=transp(getR()), C=camCenter(), d=2.5;
+  const IW=getIW(), IH=getIH();
+  const corners=[[0,0],[IW,0],[IW,IH],[0,IH]].map(([u,v])=>{
+    const ray=mv(RT,[(u-P.cx)/getFx()*d,(v-P.cy)/getFy()*d,d]);
+    return [C[0]+ray[0],C[1]+ray[1],C[2]+ray[2]];
+  });
+  const lines=[];
+  corners.forEach(fc=>lines.push({a:C,b:fc,color:'#ffd700',lw:1}));
+  for(let i=0;i<4;i++) lines.push({a:corners[i],b:corners[(i+1)%4],color:'#ffd700',lw:1.5});
+  const al=0.7;
+  [[0,'#e74c3c'],[1,'#2ecc71'],[2,'#3498db']].forEach(([col,c])=>{
+    const dir=mv(RT,[col===0?al:0,col===1?al:0,col===2?al:0]);
+    lines.push({a:C,b:C.map((x,i)=>x+dir[i]),color:c,lw:2});
+  });
+  return {lines,center:C};
+}
+
+// =============================================================
+// WORLD VIEW RENDERER
+// =============================================================
+const OBS={eye:[14,10,-14],target:[0,0,-2],up:[0,1,0],fov:60};
+let obsF,obsR,obsU;
+
+function buildObs() {
+  obsF=norm(sub3(OBS.target,OBS.eye));
+  obsR=norm(cross(obsF,OBS.up));
+  obsU=cross(obsR,obsF);
+}
+function w2obs(pw) {
+  const d=sub3(pw,OBS.eye);
+  return [dot(d,obsR),-dot(d,obsU),dot(d,obsF)];
+}
+function obs2c(vc,W,H) {
+  if(vc[2]<0.05) return null;
+  const sc=(H/2)/Math.tan(d2r(OBS.fov/2));
+  return {x:W/2+sc*vc[0]/vc[2],y:H/2+sc*vc[1]/vc[2]};
+}
+function drawWL(ctx,a,b,col,lw,W,H) {
+  const va=w2obs(a),vb=w2obs(b),EPS=0.05;
+  if(va[2]<=EPS&&vb[2]<=EPS) return;
+  let pa=va,pb=vb;
+  if(pa[2]<=EPS){const t=(EPS-va[2])/(vb[2]-va[2]);pa=va.map((x,i)=>x+t*(vb[i]-x));}
+  else if(pb[2]<=EPS){const t=(EPS-vb[2])/(va[2]-vb[2]);pb=vb.map((x,i)=>x+t*(va[i]-x));}
+  const ca=obs2c(pa,W,H),cb=obs2c(pb,W,H);
+  if(!ca||!cb) return;
+  ctx.beginPath();ctx.moveTo(ca.x,ca.y);ctx.lineTo(cb.x,cb.y);
+  ctx.strokeStyle=col;ctx.lineWidth=lw;ctx.stroke();
+}
+
+function renderWorld(canvas) {
+  const W=canvas.width,H=canvas.height;
+  const ctx=canvas.getContext('2d');
+  buildObs();
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#0d1117';ctx.fillRect(0,0,W,H);
+
+  const scene=getScene();
+
+  // Quads back-to-front
+  scene.quads.map(q=>({...q,_dz:q.verts.reduce((s,v)=>s+w2obs(v)[2],0)/q.verts.length}))
+    .sort((a,b)=>b._dz-a._dz)
+    .forEach(q=>{
+      const pts=q.verts.map(v=>obs2c(w2obs(v),W,H)).filter(Boolean);
+      if(pts.length<3) return;
+      ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);
+      pts.slice(1).forEach(p=>ctx.lineTo(p.x,p.y));ctx.closePath();
+      if(q.fill){ctx.fillStyle=q.fill;ctx.fill();}
+      if(q.stroke){ctx.strokeStyle=q.stroke;ctx.lineWidth=0.5;ctx.stroke();}
+    });
+
+  scene.lines.forEach(l=>drawWL(ctx,l.a,l.b,l.color,l.lw||1,W,H));
+
+  // Camera frustum
+  const frust=getFrustum();
+  frust.lines.forEach(l=>drawWL(ctx,l.a,l.b,l.color,l.lw||1,W,H));
+  const cc=obs2c(w2obs(frust.center),W,H);
+  if(cc){
+    ctx.beginPath();ctx.arc(cc.x,cc.y,6,0,Math.PI*2);
+    ctx.fillStyle='#ffd700';ctx.fill();
+    ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.stroke();
+  }
+
+  // Legend
+  ctx.font='11px monospace';
+  [['◆ Camera','#ffd700'],['→ X','#e74c3c'],['→ Y','#2ecc71'],['→ Z','#3498db']]
+    .forEach(([t,c],i)=>{ctx.fillStyle=c;ctx.fillText(t,8,H-8-i*15);});
+}
+
+// =============================================================
+// IMAGE VIEW (virtual canvas at 2cx × 2cy)
+// =============================================================
+let vCanvas = null;
+
+function renderImageVirtual() {
+  const IW=getIW(), IH=getIH();
+  if(!vCanvas) vCanvas=document.createElement('canvas');
+  vCanvas.width=IW; vCanvas.height=IH;
+  const ctx=vCanvas.getContext('2d');
+
+  ctx.clearRect(0,0,IW,IH);
+  ctx.fillStyle='#0d1117';ctx.fillRect(0,0,IW,IH);
+
+  ctx.save();
+  ctx.beginPath();ctx.rect(0,0,IW,IH);ctx.clip();
+
+  const scene=getScene();
+
+  // Quads
+  scene.quads.map(q=>({...q,_dz:q.verts.reduce((s,v)=>s+w2cam(v)[2],0)/q.verts.length}))
+    .sort((a,b)=>b._dz-a._dz)
+    .forEach(q=>{
+      const pts=q.verts.map(v=>projPt(v)).filter(p=>p&&p.z>0);
+      if(pts.length<3) return;
+      ctx.beginPath();ctx.moveTo(pts[0].u,pts[0].v);
+      pts.slice(1).forEach(p=>ctx.lineTo(p.u,p.v));ctx.closePath();
+      if(q.fill){ctx.fillStyle=q.fill;ctx.fill();}
+      if(q.stroke){ctx.strokeStyle=q.stroke;ctx.lineWidth=0.5;ctx.stroke();}
+    });
+
+  // Lines
+  scene.lines.forEach(l=>{
+    const seg=projLine(l.a,l.b);
+    if(!seg) return;
+    ctx.beginPath();ctx.moveTo(seg[0].u,seg[0].v);ctx.lineTo(seg[1].u,seg[1].v);
+    ctx.strokeStyle=l.color;ctx.lineWidth=l.lw||1;ctx.stroke();
+  });
+
+  ctx.restore();
+
+  // Image boundary
+  ctx.strokeStyle='#333';ctx.lineWidth=2;ctx.strokeRect(1,1,IW-2,IH-2);
+
+  // Principal point crosshair (always at center = cx,cy)
+  ctx.save();
+  ctx.strokeStyle='rgba(255,215,0,0.45)';ctx.lineWidth=1;ctx.setLineDash([5,4]);
+  ctx.beginPath();ctx.moveTo(P.cx,0);ctx.lineTo(P.cx,IH);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,P.cy);ctx.lineTo(IW,P.cy);ctx.stroke();
+  ctx.restore();
+
+  ctx.beginPath();ctx.arc(P.cx,P.cy,5,0,Math.PI*2);
+  ctx.fillStyle='#ffd700';ctx.fill();
+  ctx.strokeStyle='#000';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.font='11px monospace';ctx.fillStyle='#ffd700';
+  ctx.fillText(`(cx, cy) = (${P.cx}, ${P.cy})`, P.cx+8, P.cy-6);
+}
+
+function blitImage() {
+  const ctx=iCanvas.getContext('2d');
+  ctx.clearRect(0,0,iCanvas.width,iCanvas.height);
+  ctx.imageSmoothingEnabled=true;
+  ctx.drawImage(vCanvas,0,0,iCanvas.width,iCanvas.height);
+}
+
+function sizeImageCanvas() {
+  const wrap=iCanvas.parentElement;
+  const maxW=wrap.clientWidth-20, maxH=wrap.clientHeight-40;
+  const IW=getIW(), IH=getIH();
+  const scale=Math.min(maxW/IW, maxH/IH, 1.5);
+  iCanvas.width=Math.floor(IW*scale);
+  iCanvas.height=Math.floor(IH*scale);
+}
+
+// =============================================================
+// RENDER
+// =============================================================
+function updateLabels() {
+  const fx=getFx(), fy=getFy(), IW=getIW(), IH=getIH();
+  document.getElementById('dn-fx').textContent=Math.round(fx);
+  document.getElementById('dn-fy').textContent=Math.round(fy);
+  document.getElementById('dn-iw').textContent=IW;
+  document.getElementById('dn-ih').textContent=IH;
+  document.getElementById('lbl-w').textContent=IW;
+  document.getElementById('lbl-h').textContent=IH;
+
+  const R=getR(), t=[P.tx,P.ty,P.tz], f=v=>v.toFixed(2).padStart(6);
+  document.getElementById('matrix-K').innerHTML=`
+    <div class="matrix-subtitle">K — intrinsics</div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:2px">
+      <span class="mbracket">[</span>
+      <div>
+        <div class="mrow"><span class="mc">${f(fx)}</span><span class="mc">0</span><span class="mc">${f(P.cx)}</span></div>
+        <div class="mrow"><span class="mc">0</span><span class="mc">${f(fy)}</span><span class="mc">${f(P.cy)}</span></div>
+        <div class="mrow"><span class="mc">0</span><span class="mc">0</span><span class="mc">  1.00</span></div>
+      </div>
+      <span class="mbracket">]</span>
+    </div>
+    <div class="matrix-subtitle" style="margin-top:8px">[R | t] — extrinsics</div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:2px">
+      <span class="mbracket">[</span>
+      <div>
+        ${[0,1,2].map(i=>`<div class="mrow">
+          <span class="mc">${f(R[i][0])}</span><span class="mc">${f(R[i][1])}</span>
+          <span class="mc">${f(R[i][2])}</span><span class="mc mc-t">${f(t[i])}</span>
+        </div>`).join('')}
+      </div>
+      <span class="mbracket">]</span>
+    </div>`;
+}
+
+function renderAll() {
+  updateLabels();
+  renderWorld(wCanvas);
+  sizeImageCanvas();
+  renderImageVirtual();
+  blitImage();
+}
+
+// =============================================================
+// SLIDERS
+// =============================================================
+const SLIDERS=[
+  ['f','f',v=>Math.round(v)],
+  ['sx','sx',v=>v.toFixed(2)],
+  ['sy','sy',v=>v.toFixed(2)],
+  ['cx','cx',v=>Math.round(v)],
+  ['cy','cy',v=>Math.round(v)],
+  ['tx','tx',v=>v.toFixed(1)],['ty','ty',v=>v.toFixed(1)],['tz','tz',v=>v.toFixed(1)],
+  ['rx','rx',v=>Math.round(v)],['ry','ry',v=>Math.round(v)],['rz','rz',v=>Math.round(v)],
+];
+
+function initUI() {
+  SLIDERS.forEach(([id,key,fmt])=>{
+    const sl=document.getElementById(`s-${id}`);
+    const vl=document.getElementById(`v-${id}`);
+    sl.addEventListener('input',()=>{ P[key]=parseFloat(sl.value); vl.textContent=fmt(P[key]); renderAll(); });
+  });
+  document.getElementById('scene-select').addEventListener('change',e=>{P.scene=e.target.value;renderAll();});
+}
+
+function resetAll() {
+  P={...DEFAULTS};
+  SLIDERS.forEach(([id,key,fmt])=>{
+    document.getElementById(`s-${id}`).value=P[key];
+    document.getElementById(`v-${id}`).textContent=fmt(P[key]);
+  });
+  document.getElementById('scene-select').value=P.scene;
+  renderAll();
+}
+
+// =============================================================
+// INIT
+// =============================================================
+let wCanvas, iCanvas;
+
+window.addEventListener('load',()=>{
+  wCanvas=document.getElementById('wc');
+  iCanvas=document.getElementById('ic');
+  // Size world canvas to fill its container
+  const wWrap=wCanvas.parentElement;
+  wCanvas.width=wWrap.clientWidth-20;
+  wCanvas.height=wWrap.clientHeight-20;
+  initUI();
+  renderAll();
+});
+
+window.addEventListener('resize',()=>{
+  const wWrap=wCanvas.parentElement;
+  wCanvas.width=wWrap.clientWidth-20;
+  wCanvas.height=wWrap.clientHeight-20;
+  renderAll();
+});
+</script>
+</body>
+</html>
