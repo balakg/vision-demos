@@ -102,7 +102,7 @@
     <div>
       <div class="section-title">Scene</div>
       <select id="scene-select">
-        <option value="checkerboard">Checkerboard + Axes</option>
+        <option value="checkerboard">Checkerboard</option>
         <option value="house">House</option>
       </select>
     </div>
@@ -535,7 +535,7 @@ function updateLabels() {
 
   const R=getR(), t=[P.tx,P.ty,P.tz], f=v=>v.toFixed(2).padStart(6);
   document.getElementById('matrix-K').innerHTML=`
-    <div class="matrix-subtitle">K — intrinsics</div>
+    <div class="matrix-subtitle">K: intrinsics</div>
     <div style="display:flex;align-items:center;justify-content:center;gap:2px">
       <span class="mbracket">[</span>
       <div>
@@ -545,7 +545,7 @@ function updateLabels() {
       </div>
       <span class="mbracket">]</span>
     </div>
-    <div class="matrix-subtitle" style="margin-top:8px">[R | t] — extrinsics</div>
+    <div class="matrix-subtitle" style="margin-top:8px">[R | t]: extrinsics</div>
     <div style="display:flex;align-items:center;justify-content:center;gap:2px">
       <span class="mbracket">[</span>
       <div>
