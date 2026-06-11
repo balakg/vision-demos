@@ -337,11 +337,11 @@ function sceneHouse() {
   const quads=[
     // Floor
     {verts:[BFL,BFR,BRR,BRL], fill:'#5a4a3a', stroke:null},
-    // Walls
-    {verts:[BFL,BFR,TFR,TFL], fill:'#c4a882', stroke:null},  // front
-    {verts:[BRR,BRL,TRL,TRR], fill:'#b09070', stroke:null},  // back
-    {verts:[BFL,BRL,TRL,TFL], fill:'#b89868', stroke:null},  // left
-    {verts:[BFR,BRR,TRR,TFR], fill:'#bfa070', stroke:null},  // right
+    // Walls (each a distinct color)
+    {verts:[BFL,BFR,TFR,TFL], fill:'#c4a882', stroke:null},  // front  — tan
+    {verts:[BRR,BRL,TRL,TRR], fill:'#6a8fb0', stroke:null},  // back   — steel blue
+    {verts:[BFL,BRL,TRL,TFL], fill:'#7aaa78', stroke:null},  // left   — sage green
+    {verts:[BFR,BRR,TRR,TFR], fill:'#c8b050', stroke:null},  // right  — golden yellow
     // Roof slopes
     {verts:[TFL,TRL,RR,RF],   fill:'#8b2020', stroke:null},  // left slope
     {verts:[TFR,RF,RR,TRR],   fill:'#a02828', stroke:null},  // right slope
