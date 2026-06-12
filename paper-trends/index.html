@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Title Waves</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="titles_data.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #12121f;
+      color: #ddd;
+      min-height: 100vh;
+      padding: 2.5rem 1rem 3rem;
+    }
+    .container { max-width: 820px; margin: 0 auto; }
+
+    h1 {
+      font-size: 1.7rem;
+      font-weight: 600;
+      color: #fff;
+      text-align: center;
+      margin-bottom: 0.35rem;
+    }
+    .subtitle {
+      text-align: center;
+      color: #555;
+      font-size: 0.88rem;
+      margin-bottom: 2.2rem;
+    }
+
+    .controls { display: flex; flex-direction: column; gap: 0.85rem; margin-bottom: 1rem; }
+
+    .search-row { display: flex; gap: 0.75rem; }
+
+    #query {
+      flex: 1;
+      background: #1a1a2e;
+      border: 1px solid #2a2a45;
+      color: #eee;
+      padding: 0.65rem 1rem;
+      border-radius: 8px;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    #query:focus { border-color: #5b9bd5; }
+    #query::placeholder { color: #333; }
+
+    #searchBtn {
+      background: #1e3a5f;
+      border: 1px solid #2a5088;
+      color: #7ab8e8;
+      padding: 0.65rem 1.5rem;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s, color 0.2s;
+    }
+    #searchBtn:hover:not(:disabled) { background: #1e4a7a; color: #aad4f5; }
+    #searchBtn:disabled { opacity: 0.35; cursor: default; }
+
+    .options-row {
+      display: flex;
+      align-items: center;
+      gap: 1.8rem;
+      flex-wrap: wrap;
+    }
+    .conf-group { display: flex; gap: 1.2rem; }
+
+    .toggle-label {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      font-size: 0.9rem;
+      cursor: pointer;
+      user-select: none;
+      color: #666;
+    }
+    .toggle-label input[type=checkbox] { accent-color: #5b9bd5; width: 14px; height: 14px; cursor: pointer; }
+    .cvpr-label    { color: #5b9bd5; }
+    .neurips-label { color: #e8824a; }
+
+    .divider { width: 1px; height: 18px; background: #22223a; }
+
+    #status {
+      text-align: center;
+      font-size: 0.83rem;
+      min-height: 1.5em;
+      margin-bottom: 0.4rem;
+      color: #444;
+    }
+    #status.loading { color: #5b9bd5; }
+    #status.error   { color: #e87070; }
+
+    .chart-wrap {
+      background: #0e0e1c;
+      border: 1px solid #1c1c30;
+      border-radius: 10px;
+      padding: 1.5rem 1.2rem 1rem;
+    }
+    #chart { max-height: 390px; }
+
+    .examples {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-top: 0.7rem;
+    }
+    .examples span {
+      font-size: 0.72rem;
+      color: #444;
+      margin-right: 0.25rem;
+    }
+    .example-pill {
+      font-size: 0.75rem;
+      background: #181828;
+      border: 1px solid #252538;
+      color: #556;
+      padding: 0.25rem 0.65rem;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .example-pill:hover { border-color: #4a4a7a; color: #8a8aaa; }
+
+    .footer-note {
+      text-align: center;
+      font-size: 0.73rem;
+      color: #2e2e4a;
+      margin-top: 1.4rem;
+      line-height: 1.7;
+    }
+    .footer-note a { color: #3a3a6a; text-decoration: none; }
+    .footer-note a:hover { color: #5a5a9a; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <h1>Title Waves</h1>
+  <p class="subtitle">How often does a word or phrase appear in CVPR / NeurIPS paper titles over the years?</p>
+
+  <div class="controls">
+    <div class="search-row">
+      <input type="text" id="query" placeholder="e.g. diffusion" autocomplete="off" spellcheck="false">
+      <button id="searchBtn">Search</button>
+    </div>
+    <div class="options-row">
+      <div class="conf-group">
+        <label class="toggle-label cvpr-label">
+          <input type="checkbox" id="cvpr" checked> CVPR
+        </label>
+        <label class="toggle-label neurips-label">
+          <input type="checkbox" id="neurips" checked> NeurIPS
+        </label>
+      </div>
+      <div class="divider"></div>
+      <label class="toggle-label">
+        <input type="checkbox" id="normalize"> show as % of all papers
+      </label>
+    </div>
+  </div>
+
+  <div id="status"></div>
+
+  <div class="chart-wrap">
+    <canvas id="chart"></canvas>
+  </div>
+
+  <div class="examples">
+    <span>try:</span>
+    <button class="example-pill" data-q="diffusion">diffusion</button>
+    <button class="example-pill" data-q="transformer">transformer</button>
+    <button class="example-pill" data-q="GAN">GAN</button>
+    <button class="example-pill" data-q="3D gaussian">3D gaussian</button>
+    <button class="example-pill" data-q="self-supervised">self-supervised</button>
+    <button class="example-pill" data-q="attention">attention</button>
+    <button class="example-pill" data-q="neural radiance field">neural radiance field</button>
+  </div>
+
+  <p class="footer-note">
+    Data from <a href="https://openaccess.thecvf.com" target="_blank">CVF Open Access</a> (CVPR) and
+    <a href="https://papers.nips.cc" target="_blank">papers.nips.cc</a> (NeurIPS) · 2013–2026 · NeurIPS 2026 not yet released ·
+    Multi-word queries match papers whose title contains the exact phrase.
+  </p>
+
+</div>
+<script>
+const YEARS = Array.from({length: 14}, (_, i) => 2013 + i); // 2013-2026
+
+const VENUES = {
+  cvpr:    { key: 'cvpr',    label: 'CVPR',    color: '#5b9bd5' },
+  neurips: { key: 'neurips', label: 'NeurIPS', color: '#e8824a' },
+};
+
+// Light suffix stemmer — strips common English inflections so that
+// "corners"/"corner", "detecting"/"detected", "approaches"/"approach" all match.
+function stemWord(w) {
+  if (w.length > 5 && w.endsWith('ing'))  return w.slice(0, -3);
+  if (w.length > 4 && w.endsWith('ies'))  return w.slice(0, -3) + 'y';
+  if (w.length > 4 && w.endsWith('ed'))   return w.slice(0, -2);
+  if (w.length > 5 && w.endsWith('es'))   return w.slice(0, -2);
+  if (w.length > 3 && w.endsWith('s') && !w.endsWith('ss')) return w.slice(0, -1);
+  return w;
+}
+
+function stemTitle(t) {
+  return t.split(/\s+/).map(stemWord).join(' ');
+}
+
+let _db = null, _stemmed = null;
+
+function loadDB() {
+  if (typeof TITLES_DATA === 'undefined') throw new Error('titles_data.js not loaded');
+  if (_db) return { db: _db, stemmed: _stemmed };
+  _db = TITLES_DATA;
+  // Pre-stem all titles once at first call
+  _stemmed = {};
+  for (const conf of Object.keys(_db)) {
+    _stemmed[conf] = {};
+    for (const yr of Object.keys(_db[conf])) {
+      const arr = _db[conf][yr];
+      _stemmed[conf][yr] = arr === null ? null : arr.map(stemTitle);
+    }
+  }
+  return { db: _db, stemmed: _stemmed };
+}
+
+function countMatches(stemmedTitles, query) {
+  // Stem query words then search as substring in pre-stemmed titles
+  const q = query.toLowerCase().trim().split(/\s+/).map(stemWord).join(' ');
+  return stemmedTitles.filter(t => t.includes(q)).length;
+}
+
+let chart = null;
+
+function setStatus(msg, cls = '') {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = cls;
+}
+
+async function doSearch(term) {
+  term = (term || document.getElementById('query').value).trim();
+  if (!term) { setStatus('Enter a word or phrase.', 'error'); return; }
+
+  const useCVPR    = document.getElementById('cvpr').checked;
+  const useNeurIPS = document.getElementById('neurips').checked;
+  const normalize  = document.getElementById('normalize').checked;
+
+  if (!useCVPR && !useNeurIPS) { setStatus('Select at least one conference.', 'error'); return; }
+
+  document.getElementById('query').value = term;
+  document.getElementById('searchBtn').disabled = true;
+
+  try {
+    const { db, stemmed } = loadDB();
+    const selected = [];
+    if (useCVPR)    selected.push(VENUES.cvpr);
+    if (useNeurIPS) selected.push(VENUES.neurips);
+
+    const datasets = selected.map(venue => {
+      const values = YEARS.map(y => {
+        const st = stemmed[venue.key][String(y)];
+        if (st === null || st === undefined) return null;
+        const count = countMatches(st, term);
+        if (normalize) {
+          const total = db[venue.key][String(y)]?.length ?? 0;
+          return total > 0 ? parseFloat((count / total * 100).toFixed(3)) : 0;
+        }
+        return count;
+      });
+      return {
+        label: venue.label,
+        data: values,
+        borderColor: venue.color,
+        backgroundColor: venue.color + '15',
+        pointBackgroundColor: venue.color,
+        borderWidth: 2.5,
+        tension: 0.35,
+        pointRadius: 4,
+        pointHoverRadius: 7,
+        fill: false,
+      };
+    });
+
+    renderChart(datasets, term, normalize);
+    setStatus('');
+  } catch (e) {
+    setStatus(e.message, 'error');
+  } finally {
+    document.getElementById('searchBtn').disabled = false;
+  }
+}
+
+function renderChart(datasets, term, normalize) {
+  if (chart) chart.destroy();
+  const ctx = document.getElementById('chart').getContext('2d');
+
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: YEARS, datasets },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          display: datasets.length > 1,
+          labels: { color: '#888', font: { size: 13 }, boxWidth: 26, padding: 18 },
+        },
+        title: {
+          display: true,
+          text: `"${term}"`,
+          color: '#bbb',
+          font: { size: 15, weight: '500' },
+          padding: { top: 0, bottom: 18 },
+        },
+        tooltip: {
+          backgroundColor: '#14142a',
+          borderColor: '#252540',
+          borderWidth: 1,
+          titleColor: '#aaa',
+          bodyColor: '#777',
+          padding: 10,
+          callbacks: {
+            label: ctx => {
+              const v = ctx.parsed.y;
+              const suffix = normalize ? '%' : ' papers';
+              return `  ${ctx.dataset.label}: ${normalize ? v.toFixed(2) : v}${suffix}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#555', font: { size: 12 } },
+          grid: { color: '#16162a' },
+        },
+        y: {
+          beginAtZero: true,
+          ticks: { color: '#555', font: { size: 12 } },
+          grid: { color: '#16162a' },
+          title: {
+            display: true,
+            text: normalize ? '% of all papers' : 'papers per year',
+            color: '#444',
+            font: { size: 12 },
+          }
+        }
+      }
+    }
+  });
+}
+
+function initPlaceholder() {
+  const ctx = document.getElementById('chart').getContext('2d');
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: YEARS, datasets: [] },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        title: { display: true, text: 'Search for a term above', color: '#2a2a44', font: { size: 14 } },
+      },
+      scales: {
+        x: { ticks: { color: '#252535' }, grid: { color: '#14142a' } },
+        y: { ticks: { color: '#252535' }, grid: { color: '#14142a' }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+document.getElementById('searchBtn').addEventListener('click', () => doSearch());
+document.getElementById('query').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+document.querySelectorAll('.example-pill').forEach(btn => {
+  btn.addEventListener('click', () => doSearch(btn.dataset.q));
+});
+
+initPlaceholder();
+</script>
+</body>
+</html>

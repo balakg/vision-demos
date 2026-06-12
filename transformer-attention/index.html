@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Transformer Self-Attention</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #12121f;
+      color: #ddd;
+      min-height: 100vh;
+      padding: 1.5rem 1rem 2.5rem;
+    }
+    h1 { text-align:center; font-size:1.6rem; font-weight:600; color:#fff; margin-bottom:0.3rem; }
+    .subtitle { text-align:center; color:#555; font-size:0.88rem; margin-bottom:1.2rem; }
+    .step-header { text-align:center; margin-bottom:1rem; }
+    .step-num { font-size:0.75rem; color:#555; text-transform:uppercase; letter-spacing:0.1em; margin-right:0.6rem; }
+    .step-title { font-size:1.1rem; font-weight:600; color:#e0e0e0; }
+    .demo-area { display:flex; gap:1.5rem; justify-content:center; align-items:flex-start; flex-wrap:wrap; margin-bottom:0.9rem; }
+    .left-col, .right-col { display:flex; flex-direction:column; align-items:center; gap:0.35rem; }
+    .panel-label { font-size:0.72rem; text-transform:uppercase; letter-spacing:0.08em; color:#444; }
+    canvas { display:block; border-radius:6px; }
+    #imgCanvas { cursor:pointer; border:2px solid #2a2a3a; }
+    #imgCanvas:hover { border-color:#3a3a5a; }
+    #stepCanvas { border:2px solid #2a2a3a; }
+    .panel-hint { font-size:0.72rem; color:#3a3a4a; }
+    .step-desc { max-width:780px; margin:0 auto 1.1rem; font-size:0.84rem; color:#666; line-height:1.65; text-align:center; min-height:2.8em; }
+    .step-desc b { color:#999; }
+    .eq-q { color:#6ab0e8; font-weight:600; }
+    .eq-k { color:#6adba0; font-weight:600; }
+    .eq-v { color:#e8a06a; font-weight:600; }
+    .nav-area { display:flex; align-items:center; justify-content:center; gap:1.2rem; margin-bottom:0.5rem; }
+    .nav-btn { background:#1e1e38; border:1px solid #383858; color:#888; padding:0.4rem 1rem; border-radius:6px; cursor:pointer; font-size:0.9rem; min-width:80px; }
+    .nav-btn:hover:not(:disabled) { background:#2a2a50; color:#ddd; }
+    .nav-btn:disabled { opacity:0.3; cursor:default; }
+    .dots { display:flex; gap:0.5rem; align-items:center; }
+    .dot { width:9px; height:9px; border-radius:50%; background:#2a2a42; cursor:pointer; border:1px solid #3a3a54; }
+    .dot.active { background:#6ab0e8; transform:scale(1.2); border-color:#6ab0e8; }
+    .dot:hover { background:#4a4a7a; }
+    .step-labels { display:flex; justify-content:center; font-size:0.68rem; color:#3a3a5a; }
+    .step-labels span { width:80px; text-align:center; padding:0 2px; }
+    .step-labels span.active { color:#6ab0e8; }
+  </style>
+</head>
+<body>
+
+<h1>Transformer Self-Attention</h1>
+<p class="subtitle">Step through a single self-attention layer — use the arrows or dots to navigate</p>
+
+<div class="step-header">
+  <span class="step-num" id="stepNum">Step 1 / 7</span>
+  <span class="step-title" id="stepTitle">Image → Patches</span>
+</div>
+
+<div class="demo-area">
+  <div class="left-col">
+    <div class="panel-label">Input image</div>
+    <canvas id="imgCanvas" width="280" height="280"></canvas>
+    <div class="panel-hint">Click a patch to inspect it</div>
+  </div>
+  <div class="right-col">
+    <div class="panel-label" id="rightLabel">&nbsp;</div>
+    <canvas id="stepCanvas" width="500" height="300"></canvas>
+  </div>
+</div>
+
+<div class="step-desc" id="stepDesc"></div>
+
+<div class="nav-area">
+  <button class="nav-btn" id="prevBtn">◀ Prev</button>
+  <div class="dots" id="dots"></div>
+  <button class="nav-btn" id="nextBtn">Next ▶</button>
+</div>
+<div class="step-labels" id="stepLabels"></div>
+
+<script>
+// ─── PRNG ─────────────────────────────────────────────────────────────────────
+function mulberry32(seed) {
+  return function () {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    var t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function randn(rng) {
+  let u, v; do { u = rng(); v = rng(); } while (u === 0);
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+function randMat(rng, rows, cols, scale) {
+  const M = new Float32Array(rows * cols);
+  for (let i = 0; i < rows * cols; i++) M[i] = randn(rng) * scale;
+  return M;
+}
+
+// ─── CONSTANTS ────────────────────────────────────────────────────────────────
+const IMG = 32, PSIZ = 8, GRID = 4, N = 16;
+const PDIM = PSIZ * PSIZ;
+const D = 8;
+const IW = 280, IH = 280, ICELL = IW / GRID;
+const SW = 500, SH = 300;
+
+// ─── DRAW CAT ─────────────────────────────────────────────────────────────────
+function drawCat(ctx, size) {
+  const s = size / 32;
+  ctx.fillStyle = '#c8b890'; ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = '#c07010';
+  ctx.beginPath(); ctx.moveTo(4*s,15*s); ctx.lineTo(9*s,2*s); ctx.lineTo(14*s,13*s); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(28*s,15*s); ctx.lineTo(23*s,2*s); ctx.lineTo(18*s,13*s); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#e898a8';
+  ctx.beginPath(); ctx.moveTo(6.5*s,13.5*s); ctx.lineTo(9*s,6*s); ctx.lineTo(12.5*s,13*s); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(25.5*s,13.5*s); ctx.lineTo(23*s,6*s); ctx.lineTo(19.5*s,13*s); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#d88028';
+  ctx.beginPath(); ctx.ellipse(16*s,19*s,13*s,12*s,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#f0f0f0';
+  ctx.beginPath(); ctx.ellipse(11*s,17*s,3.5*s,3*s,0,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(21*s,17*s,3.5*s,3*s,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#38a858';
+  ctx.beginPath(); ctx.ellipse(11*s,17*s,2.6*s,2.4*s,0,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(21*s,17*s,2.6*s,2.4*s,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#111';
+  ctx.beginPath(); ctx.ellipse(11*s,17*s,1.1*s,2.1*s,0,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(21*s,17*s,1.1*s,2.1*s,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.beginPath(); ctx.ellipse(12*s,15.8*s,0.7*s,0.6*s,0,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(22*s,15.8*s,0.7*s,0.6*s,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#d85060';
+  ctx.beginPath(); ctx.moveTo(16*s,22*s); ctx.lineTo(14*s,24.5*s); ctx.lineTo(18*s,24.5*s); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = '#904050'; ctx.lineWidth = 0.7*s; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(14*s,24.5*s); ctx.quadraticCurveTo(12*s,27*s,10*s,25.5*s); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(18*s,24.5*s); ctx.quadraticCurveTo(20*s,27*s,22*s,25.5*s); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,240,0.75)'; ctx.lineWidth = 0.5*s;
+  [[14,23,1,21],[14,24.5,1,24.5],[14,26,1,27.5]].forEach(([x1,y1,x2,y2])=>{
+    ctx.beginPath(); ctx.moveTo(x1*s,y1*s); ctx.lineTo(x2*s,y2*s); ctx.stroke();
+  });
+  [[18,23,31,21],[18,24.5,31,24.5],[18,26,31,27.5]].forEach(([x1,y1,x2,y2])=>{
+    ctx.beginPath(); ctx.moveTo(x1*s,y1*s); ctx.lineTo(x2*s,y2*s); ctx.stroke();
+  });
+}
+
+// ─── EXTRACT PATCHES ──────────────────────────────────────────────────────────
+const srcCvs = document.createElement('canvas');
+srcCvs.width = srcCvs.height = IMG;
+drawCat(srcCvs.getContext('2d'), IMG);
+const rawPx = srcCvs.getContext('2d').getImageData(0, 0, IMG, IMG).data;
+
+const patchesGray = [], patchesRGB = [];
+for (let i = 0; i < N; i++) {
+  const pr = Math.floor(i/GRID), pc = i%GRID;
+  const gray = new Float32Array(PDIM), rgb = new Float32Array(PDIM*3);
+  for (let py = 0; py < PSIZ; py++) for (let px = 0; px < PSIZ; px++) {
+    const ix=pc*PSIZ+px, iy=pr*PSIZ+py, idx=(iy*IMG+ix)*4;
+    const r=rawPx[idx]/255, g=rawPx[idx+1]/255, b=rawPx[idx+2]/255, k=py*PSIZ+px;
+    gray[k]=0.299*r+0.587*g+0.114*b; rgb[k*3]=r; rgb[k*3+1]=g; rgb[k*3+2]=b;
+  }
+  patchesGray.push(gray); patchesRGB.push(rgb);
+}
+
+// ─── POSITIONAL ENCODING ──────────────────────────────────────────────────────
+function makePosEnc(row, col) {
+  const r=row/(GRID-1), c=col/(GRID-1), enc=new Float32Array(D);
+  for (let d=0;d<D;d++) {
+    const freq=Math.pow(100,-2*Math.floor(d/4)/D), pos=(d%2===0)?r:c;
+    enc[d]=(d%4<2)?Math.sin(pos*Math.PI*freq*4):Math.cos(pos*Math.PI*freq*4);
+  }
+  return enc;
+}
+const posEncs = [];
+for (let i=0;i<N;i++) posEncs.push(makePosEnc(Math.floor(i/GRID),i%GRID));
+
+// ─── MATH ─────────────────────────────────────────────────────────────────────
+function matMul(A,B,m,k,n){
+  const C=new Float32Array(m*n);
+  for(let i=0;i<m;i++) for(let j=0;j<n;j++){
+    let s=0; for(let l=0;l<k;l++) s+=A[i*k+l]*B[l*n+j]; C[i*n+j]=s;
+  }
+  return C;
+}
+function softmaxRow(arr){
+  const mx=Math.max(...arr), e=arr.map(x=>Math.exp(x-mx)), s=e.reduce((a,b)=>a+b,0);
+  return e.map(x=>x/s);
+}
+
+// ─── WEIGHTS + PRECOMPUTE ─────────────────────────────────────────────────────
+const rng=mulberry32(42), sc=1/Math.sqrt(D);
+const W_E=randMat(rng,PDIM,D,1/Math.sqrt(PDIM));
+const W_Q=randMat(rng,D,D,sc), W_K=randMat(rng,D,D,sc), W_V=randMat(rng,D,D,sc);
+
+const patchEmbs=new Float32Array(N*D);
+for(let i=0;i<N;i++) patchEmbs.set(matMul(patchesGray[i],W_E,1,PDIM,D),i*D);
+
+const combined=new Float32Array(N*D);
+for(let i=0;i<N;i++) for(let d=0;d<D;d++) combined[i*D+d]=patchEmbs[i*D+d]+posEncs[i][d];
+
+const Q=matMul(combined,W_Q,N,D,D), K=matMul(combined,W_K,N,D,D), V=matMul(combined,W_V,N,D,D);
+
+const rawScores=new Float32Array(N*N);
+for(let i=0;i<N;i++) for(let j=0;j<N;j++){
+  let dot=0; for(let d=0;d<D;d++) dot+=Q[i*D+d]*K[j*D+d]; rawScores[i*N+j]=dot/Math.sqrt(D);
+}
+
+const attnWeights=new Float32Array(N*N);
+for(let i=0;i<N;i++){
+  const sm=softmaxRow(Array.from(rawScores.slice(i*N,(i+1)*N)));
+  for(let j=0;j<N;j++) attnWeights[i*N+j]=sm[j];
+}
+
+const outputPatches=[];
+for(let i=0;i<N;i++){
+  const blend=new Float32Array(PDIM*3);
+  for(let j=0;j<N;j++){
+    const w=attnWeights[i*N+j], vj=patchesRGB[j];
+    for(let d=0;d<PDIM*3;d++) blend[d]+=w*vj[d];
+  }
+  outputPatches.push(blend);
+}
+
+// ─── CANVAS SETUP ─────────────────────────────────────────────────────────────
+const imgCanvas=document.getElementById('imgCanvas'), stepCanvas=document.getElementById('stepCanvas');
+const ictx=imgCanvas.getContext('2d'), sctx=stepCanvas.getContext('2d');
+const catDisp=document.createElement('canvas'); catDisp.width=catDisp.height=IW;
+drawCat(catDisp.getContext('2d'),IW);
+
+let currentStep=0, selectedPatch=5;
+
+// ─── DRAW HELPERS ─────────────────────────────────────────────────────────────
+
+// Colored vector rectangle: blue=positive, red=negative, normalized per call
+function drawVector(ctx, x, y, w, h, values) {
+  const n=values.length, cw=w/n;
+  const maxAbs=Math.max(...Array.from(values).map(Math.abs),1e-4);
+  for(let i=0;i<n;i++){
+    const t=values[i]/maxAbs;
+    let r,g,b;
+    if(t>=0){ r=Math.round(15+(1-t)*15); g=Math.round(25+(1-t)*25); b=Math.round(70+t*160); }
+    else     { r=Math.round(70+(-t)*160); g=Math.round(10+(1+t)*25); b=Math.round(10+(1+t)*15); }
+    ctx.fillStyle=`rgb(${r},${g},${b})`;
+    ctx.fillRect(x+i*cw+0.5, y+0.5, cw-0.5, h-1);
+  }
+  // dividers
+  ctx.strokeStyle='rgba(0,0,0,0.45)'; ctx.lineWidth=1;
+  for(let i=1;i<n;i++){
+    ctx.beginPath(); ctx.moveTo(x+i*cw,y); ctx.lineTo(x+i*cw,y+h); ctx.stroke();
+  }
+  // border
+  ctx.strokeStyle='#5a5a7a'; ctx.lineWidth=1.5;
+  ctx.strokeRect(x+0.75,y+0.75,w-1.5,h-1.5);
+}
+
+// Dimension index labels below a vector
+function dimLabels(ctx, x, y, w, n) {
+  const cw=w/n;
+  ctx.fillStyle='#4a4a6a'; ctx.font='10px monospace';
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  for(let i=0;i<n;i++) ctx.fillText(i, x+(i+0.5)*cw, y);
+}
+
+// Text label helper
+function lbl(ctx, x, y, text, color='#888', size=12, align='center') {
+  ctx.fillStyle=color; ctx.font=`${size}px sans-serif`;
+  ctx.textAlign=align; ctx.textBaseline='middle';
+  ctx.fillText(text,x,y);
+}
+
+// Arrow
+function arrow(ctx, x1, y1, x2, y2, color='#3a3a5a') {
+  ctx.strokeStyle=color; ctx.lineWidth=1.5; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  const a=Math.atan2(y2-y1,x2-x1), hs=6;
+  ctx.fillStyle=color;
+  ctx.beginPath();
+  ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-hs*Math.cos(a-0.4),y2-hs*Math.sin(a-0.4));
+  ctx.lineTo(x2-hs*Math.cos(a+0.4),y2-hs*Math.sin(a+0.4));
+  ctx.closePath(); ctx.fill();
+}
+
+// Patch thumbnail from patchesRGB
+function drawPatchThumb(ctx, px, py, size, patchIdx) {
+  const rgb=patchesRGB[patchIdx], imgData=ctx.createImageData(PSIZ,PSIZ);
+  for(let k=0;k<PDIM;k++){
+    imgData.data[k*4]  =Math.round(rgb[k*3]  *255);
+    imgData.data[k*4+1]=Math.round(rgb[k*3+1]*255);
+    imgData.data[k*4+2]=Math.round(rgb[k*3+2]*255);
+    imgData.data[k*4+3]=255;
+  }
+  const tmp=document.createElement('canvas'); tmp.width=tmp.height=PSIZ;
+  tmp.getContext('2d').putImageData(imgData,0,0);
+  ctx.imageSmoothingEnabled=false; ctx.drawImage(tmp,px,py,size,size);
+}
+
+// N×N heatmap
+function drawHeatmap(ctx, x, y, cs, data, opts={}) {
+  const lpad=30, tpad=26, gw=N*cs, gh=N*cs;
+  let dmin=Infinity, dmax=-Infinity;
+  for(let v of data){ if(v<dmin)dmin=v; if(v>dmax)dmax=v; }
+  if(dmax===dmin) dmax=dmin+1;
+  for(let i=0;i<N;i++) for(let j=0;j<N;j++){
+    const t=(data[i*N+j]-dmin)/(dmax-dmin);
+    let r,g,b;
+    if(t<0.5){ r=Math.round(t*2*30); g=Math.round(t*2*80); b=Math.round(40+t*2*180); }
+    else{ const tt=(t-0.5)*2; r=Math.round(30+tt*225); g=Math.round(80+tt*160); b=Math.round(220-tt*200); }
+    ctx.fillStyle=`rgb(${r},${g},${b})`;
+    ctx.fillRect(x+lpad+j*cs,y+tpad+i*cs,cs-1,cs-1);
+  }
+  if(opts.highlightRow!==undefined){
+    const i=opts.highlightRow;
+    ctx.strokeStyle='rgba(255,255,255,0.9)'; ctx.lineWidth=1.5;
+    ctx.strokeRect(x+lpad,y+tpad+i*cs-0.5,gw,cs+1);
+  }
+  // axis labels every 4
+  ctx.fillStyle='#666'; ctx.font='11px monospace';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(let j=0;j<N;j+=4){
+    ctx.fillText(j, x+lpad+j*cs+cs/2, y+tpad-13);
+    ctx.fillText(j, x+lpad-15, y+tpad+j*cs+cs/2);
+  }
+  ctx.fillStyle='#555'; ctx.font='11px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('patch j', x+lpad+gw/2, y+8);
+  ctx.save(); ctx.translate(x+10,y+tpad+gh/2); ctx.rotate(-Math.PI/2);
+  ctx.fillText('patch i', 0, 0); ctx.restore();
+}
+
+// ─── LEFT PANEL ───────────────────────────────────────────────────────────────
+function renderLeft() {
+  ictx.drawImage(catDisp,0,0);
+  ictx.strokeStyle='rgba(255,255,255,0.22)'; ictx.lineWidth=1;
+  for(let i=0;i<=GRID;i++){
+    ictx.beginPath(); ictx.moveTo(i*ICELL,0); ictx.lineTo(i*ICELL,IH); ictx.stroke();
+    ictx.beginPath(); ictx.moveTo(0,i*ICELL); ictx.lineTo(IW,i*ICELL); ictx.stroke();
+  }
+  ictx.font=`${ICELL*0.22}px monospace`; ictx.textAlign='left'; ictx.textBaseline='top';
+  for(let i=0;i<N;i++){
+    const r=Math.floor(i/GRID), c=i%GRID;
+    ictx.fillStyle='rgba(255,255,255,0.35)';
+    ictx.fillText(i,c*ICELL+3,r*ICELL+3);
+  }
+  if(selectedPatch!==null){
+    const r=Math.floor(selectedPatch/GRID), c=selectedPatch%GRID;
+    ictx.strokeStyle='#fff'; ictx.lineWidth=2.5;
+    ictx.strokeRect(c*ICELL+1.5,r*ICELL+1.5,ICELL-3,ICELL-3);
+  }
+}
+
+// ─── STEP RENDERERS ───────────────────────────────────────────────────────────
+
+function renderStep0() {
+  sctx.fillStyle='#0c0c1a'; sctx.fillRect(0,0,SW,SH);
+  const ts=54, gap=10, gw=GRID*(ts+gap)-gap, ox=(SW-gw)/2, oy=(SH-gw)/2;
+  for(let i=0;i<N;i++){
+    const r=Math.floor(i/GRID), c=i%GRID, px=ox+c*(ts+gap), py=oy+r*(ts+gap);
+    sctx.strokeStyle=i===selectedPatch?'#fff':'#2a2a42';
+    sctx.lineWidth=i===selectedPatch?2:1;
+    sctx.strokeRect(px-1,py-1,ts+2,ts+2);
+    drawPatchThumb(sctx,px,py,ts,i);
+    sctx.fillStyle=i===selectedPatch?'#fff':'rgba(255,255,255,0.4)';
+    sctx.font='10px monospace'; sctx.textAlign='left'; sctx.textBaseline='top';
+    sctx.fillText(i,px+2,py+2);
+  }
+  document.getElementById('rightLabel').textContent='4 × 4 = 16 patches';
+}
+
+function renderStep1() {
+  sctx.fillStyle='#0c0c1a'; sctx.fillRect(0,0,SW,SH);
+  const p=selectedPatch, ts=80, tx=25, ty=SH/2-ts/2-8;
+
+  // Thumbnail
+  drawPatchThumb(sctx,tx,ty,ts,p);
+  sctx.strokeStyle='#3a3a5a'; sctx.lineWidth=1; sctx.strokeRect(tx,ty,ts,ts);
+  lbl(sctx,tx+ts/2,ty+ts+16,`patch ${p}`,'#777',12);
+
+  // Arrow + label
+  const ax1=tx+ts+14, ax2=ax1+52, ay=SH/2-8;
+  arrow(sctx,ax1,ay,ax2,ay);
+  lbl(sctx,(ax1+ax2)/2,ay-16,'W_E','#6ab0e8',12);
+  lbl(sctx,(ax1+ax2)/2,ay+14,'64→8','#555',11);
+
+  // Embedding vector
+  const vx=ax2+12, vw=SW-vx-20, vh=48, vy=SH/2-vh/2-8;
+  lbl(sctx,vx+vw/2,vy-18,'patch embedding','#aaa',13);
+  drawVector(sctx,vx,vy,vw,vh,patchEmbs.slice(p*D,(p+1)*D));
+  dimLabels(sctx,vx,vy+vh+8,vw,D);
+
+  document.getElementById('rightLabel').textContent=`patch ${p} — linear projection`;
+}
+
+function renderStep2() {
+  sctx.fillStyle='#0c0c1a'; sctx.fillRect(0,0,SW,SH);
+  const p=selectedPatch;
+
+  // ── Three vectors (top half) ──────────────────────────────────────────────
+  const vw=128, vh=42, vy=62;
+  // centers spaced so total = 3×128 + 2×symbol(30) = 444, margin=(500-444)/2=28
+  const x1=28, x2=x1+vw+30, x3=x2+vw+30;
+
+  lbl(sctx,x1+vw/2,vy-20,'patch emb','#aaa',13);
+  lbl(sctx,x2+vw/2,vy-20,'pos enc','#6adba0',13);
+  lbl(sctx,x3+vw/2,vy-20,'combined','#c090e8',13);
+
+  drawVector(sctx,x1,vy,vw,vh,patchEmbs.slice(p*D,(p+1)*D));
+  drawVector(sctx,x2,vy,vw,vh,posEncs[p]);
+  drawVector(sctx,x3,vy,vw,vh,combined.slice(p*D,(p+1)*D));
+
+  lbl(sctx,x1+vw+15,vy+vh/2,'+','#555',20);
+  lbl(sctx,x2+vw+15,vy+vh/2,'=','#555',20);
+
+  dimLabels(sctx,x1,vy+vh+8,vw,D);
+  dimLabels(sctx,x2,vy+vh+8,vw,D);
+  dimLabels(sctx,x3,vy+vh+8,vw,D);
+
+  // ── Spatial grid (bottom half) ────────────────────────────────────────────
+  lbl(sctx,SW/2,148,'positional encoding (dim 0) varies by grid position','#666',12);
+
+  const cs=30, gx=(SW-GRID*cs)/2, gy=164;
+  let pmin=Infinity, pmax=-Infinity;
+  for(let i=0;i<N;i++){ if(posEncs[i][0]<pmin)pmin=posEncs[i][0]; if(posEncs[i][0]>pmax)pmax=posEncs[i][0]; }
+  for(let i=0;i<N;i++){
+    const r=Math.floor(i/GRID), c=i%GRID, t=(posEncs[i][0]-pmin)/(pmax-pmin+1e-6), v=Math.round(t*200+30);
+    sctx.fillStyle=`rgb(${v/2},${v/2},${v})`;
+    sctx.fillRect(gx+c*cs,gy+r*cs,cs-2,cs-2);
+    sctx.fillStyle=i===p?'#fff':'rgba(255,255,255,0.55)';
+    sctx.font='10px monospace'; sctx.textAlign='center'; sctx.textBaseline='middle';
+    sctx.fillText(i,gx+c*cs+cs/2-1,gy+r*cs+cs/2-1);
+  }
+  if(p!==null){
+    const pr=Math.floor(p/GRID), pc=p%GRID;
+    sctx.strokeStyle='#6adba0'; sctx.lineWidth=2;
+    sctx.strokeRect(gx+pc*cs,gy+pr*cs,cs-2,cs-2);
+  }
+
+  document.getElementById('rightLabel').textContent=`patch ${p} — adding positional encoding`;
+}
+
+function renderStep3() {
+  sctx.fillStyle='#0c0c1a'; sctx.fillRect(0,0,SW,SH);
+  const p=selectedPatch;
+
+  // Combined vector (top center)
+  const cvw=260, cvh=42, cvx=(SW-cvw)/2, cvy=18;
+  lbl(sctx,SW/2,cvy-14,'combined embedding','#c090e8',13);
+  drawVector(sctx,cvx,cvy,cvw,cvh,combined.slice(p*D,(p+1)*D));
+  dimLabels(sctx,cvx,cvy+cvh+7,cvw,D);
+
+  // Three arrows down
+  const botY=cvy+cvh+30, topY=botY+36;
+  const cx=[80,250,420];
+  cx.forEach(x=>arrow(sctx,SW/2,cvy+cvh+4,x,topY-4));
+
+  lbl(sctx,cx[0]-18,botY,'W_Q','#6ab0e8',13);
+  lbl(sctx,cx[1],   botY,'W_K','#6adba0',13);
+  lbl(sctx,cx[2]+18,botY,'W_V','#e8a06a',13);
+
+  // Q, K, V vectors
+  const vw=140, vh=42, vy=topY;
+  const vx=[cx[0]-vw/2, cx[1]-vw/2, cx[2]-vw/2];
+
+  lbl(sctx,cx[0],vy-16,'Query  Q','#6ab0e8',13);
+  lbl(sctx,cx[1],vy-16,'Key  K','#6adba0',13);
+  lbl(sctx,cx[2],vy-16,'Value  V','#e8a06a',13);
+
+  drawVector(sctx,vx[0],vy,vw,vh,Q.slice(p*D,(p+1)*D));
+  drawVector(sctx,vx[1],vy,vw,vh,K.slice(p*D,(p+1)*D));
+  drawVector(sctx,vx[2],vy,vw,vh,V.slice(p*D,(p+1)*D));
+
+  dimLabels(sctx,vx[0],vy+vh+7,vw,D);
+  dimLabels(sctx,vx[1],vy+vh+7,vw,D);
+  dimLabels(sctx,vx[2],vy+vh+7,vw,D);
+
+  lbl(sctx,cx[0],vy+vh+28,'"what do I seek?"','#6ab0e8',11);
+  lbl(sctx,cx[1],vy+vh+28,'"what am I?"','#6adba0',11);
+  lbl(sctx,cx[2],vy+vh+28,'"what do I offer?"','#e8a06a',11);
+
+  document.getElementById('rightLabel').textContent=`patch ${p} — Q, K, V projections`;
+}
+
+function renderStep4() {
+  sctx.fillStyle='#0c0c1a'; sctx.fillRect(0,0,SW,SH);
+
+  const cs=14;
+  drawHeatmap(sctx,0,4,cs,rawScores,{highlightRow:selectedPatch});
+
+  const hmW=30+N*cs+8, bx=hmW+8, bw=SW-bx-12;
+  if(selectedPatch!==null){
+    const vy=60, vh=44;
+    lbl(sctx,bx+bw/2,vy-20,`scores: patch ${selectedPatch} → all patches`,'#aaa',12);
+    drawVector(sctx,bx,vy,bw,vh,rawScores.slice(selectedPatch*N,(selectedPatch+1)*N));
+    // patch index labels every 4
+    sctx.fillStyle='#4a4a6a'; sctx.font='11px monospace'; sctx.textAlign='center'; sctx.textBaseline='top';
+    const cw=bw/N;
+    for(let j=0;j<N;j+=4) sctx.fillText(j,bx+(j+0.5)*cw,vy+vh+7);
+    lbl(sctx,bx+bw/2,vy+vh+26,'patch j','#555',12);
+
+    lbl(sctx,bx+bw/2,160,'(blue=high, red=low)','#444',11);
+  }
+
+  document.getElementById('rightLabel').textContent='raw scores  Q·Kᵀ / √dₖ';
+}
+
+function renderStep5() {
+  sctx.fillStyle='#0c0c1a'; sctx.fillRect(0,0,SW,SH);
+
+  const cs=14;
+  drawHeatmap(sctx,0,4,cs,attnWeights,{highlightRow:selectedPatch});
+
+  const hmW=30+N*cs+8, bx=hmW+8, bw=SW-bx-12;
+  if(selectedPatch!==null){
+    const vy=60, vh=44;
+    lbl(sctx,bx+bw/2,vy-20,`weights: patch ${selectedPatch} → all patches`,'#aaa',12);
+    drawVector(sctx,bx,vy,bw,vh,attnWeights.slice(selectedPatch*N,(selectedPatch+1)*N));
+    sctx.fillStyle='#4a4a6a'; sctx.font='11px monospace'; sctx.textAlign='center'; sctx.textBaseline='top';
+    const cw=bw/N;
+    for(let j=0;j<N;j+=4) sctx.fillText(j,bx+(j+0.5)*cw,vy+vh+7);
+    lbl(sctx,bx+bw/2,vy+vh+26,'patch j','#555',12);
+    lbl(sctx,bx+bw/2,160,'(row sums to 1)','#444',11);
+  }
+
+  document.getElementById('rightLabel').textContent='attention weights  (after softmax)';
+}
+
+function renderStep6() {
+  sctx.fillStyle='#0c0c1a'; sctx.fillRect(0,0,SW,SH);
+
+  // Output image (left)
+  const imgData=new ImageData(IMG,IMG);
+  for(let i=0;i<N;i++){
+    const pr=Math.floor(i/GRID), pc=i%GRID, blend=outputPatches[i];
+    for(let py=0;py<PSIZ;py++) for(let px=0;px<PSIZ;px++){
+      const ix=pc*PSIZ+px, iy=pr*PSIZ+py, fi=(iy*IMG+ix)*4, k=(py*PSIZ+px)*3;
+      imgData.data[fi]  =Math.min(255,Math.round(blend[k]  *255));
+      imgData.data[fi+1]=Math.min(255,Math.round(blend[k+1]*255));
+      imgData.data[fi+2]=Math.min(255,Math.round(blend[k+2]*255));
+      imgData.data[fi+3]=255;
+    }
+  }
+  const tmp=document.createElement('canvas'); tmp.width=tmp.height=IMG;
+  tmp.getContext('2d').putImageData(imgData,0,0);
+  const dsz=200, ox=18, oy=(SH-dsz)/2-10;
+  lbl(sctx,ox+dsz/2,oy-16,'attention output','#aaa',13);
+  sctx.imageSmoothingEnabled=false;
+  sctx.drawImage(tmp,ox,oy,dsz,dsz);
+  // grid overlay
+  const cs2=dsz/GRID;
+  sctx.strokeStyle='rgba(255,255,255,0.2)'; sctx.lineWidth=1;
+  for(let i=0;i<=GRID;i++){
+    sctx.beginPath(); sctx.moveTo(ox+i*cs2,oy); sctx.lineTo(ox+i*cs2,oy+dsz); sctx.stroke();
+    sctx.beginPath(); sctx.moveTo(ox,oy+i*cs2); sctx.lineTo(ox+dsz,oy+i*cs2); sctx.stroke();
+  }
+  if(selectedPatch!==null){
+    const r=Math.floor(selectedPatch/GRID), c=selectedPatch%GRID;
+    sctx.strokeStyle='#fff'; sctx.lineWidth=2;
+    sctx.strokeRect(ox+c*cs2+1,oy+r*cs2+1,cs2-2,cs2-2);
+  }
+
+  // Attention weight vector (right)
+  if(selectedPatch!==null){
+    const bx=ox+dsz+22, bw=SW-bx-12, bvy=oy+10, bvh=44;
+    lbl(sctx,bx+bw/2,bvy-20,`weights for patch ${selectedPatch}`,'#aaa',12);
+    drawVector(sctx,bx,bvy,bw,bvh,attnWeights.slice(selectedPatch*N,(selectedPatch+1)*N));
+    sctx.fillStyle='#4a4a6a'; sctx.font='11px monospace'; sctx.textAlign='center'; sctx.textBaseline='top';
+    const cw=bw/N;
+    for(let j=0;j<N;j+=4) sctx.fillText(j,bx+(j+0.5)*cw,bvy+bvh+7);
+    lbl(sctx,bx+bw/2,bvy+bvh+26,'patch j','#555',12);
+    lbl(sctx,bx+bw/2,bvy+bvh+55,'Each patch in the output\nis a blend of all V vectors.','#555',11);
+  }
+
+  document.getElementById('rightLabel').textContent='output  (Σ attention · V)';
+}
+
+// ─── STEP METADATA ────────────────────────────────────────────────────────────
+const STEP_TITLES=[
+  'Image → Patches','Patch Embeddings','Add Positional Encoding',
+  'Q, K, V Projections','Q·Kᵀ Attention Scores','Softmax → Attention Weights',
+  'Weighted Sum of Values',
+];
+const STEP_LABELS=['Patches','Embed','+Pos Enc','Q K V','Scores','Softmax','Output'];
+const STEP_DESCS=[
+  'The input image is divided into <b>N = 4 × 4 = 16</b> non-overlapping patches. Each patch is treated as an independent token — the basic unit of a Vision Transformer (ViT).',
+  'Each patch is flattened into a pixel vector and projected to a <b>d = 8</b> dimensional embedding via a learned linear layer <b>W<sub>E</sub></b>. Blue = positive value, red = negative.',
+  'Because self-attention has no notion of position, a <b>positional encoding</b> — unique to each grid location — is added to each patch embedding. The grid below shows how encoding values vary spatially.',
+  'Three learned projections — <b class="eq-q">W<sub>Q</sub></b>, <b class="eq-k">W<sub>K</sub></b>, <b class="eq-v">W<sub>V</sub></b> — produce a query, key, and value vector per token. Q asks "what am I looking for?", K says "what am I?", V carries the information to share.',
+  'The score between patch <i>i</i> and patch <i>j</i> is <span class="eq-q">Q</span><sub>i</sub>·<span class="eq-k">K</span><sub>j</sub><sup>T</sup> / √d<sub>k</sub>. High scores (warm) mean the query finds that key relevant. The highlighted row shows scores from the selected patch.',
+  '<b>Softmax</b> converts each row of raw scores into a probability distribution that sums to 1. These are the final attention weights — which patches will the query gather information from, and how much.',
+  'The output at each position is a weighted sum of all <span class="eq-v">V</span> vectors. The right panel shows contribution weights for the selected patch. Compare the output image (left) to the input on the left panel.',
+];
+
+// ─── RENDER ───────────────────────────────────────────────────────────────────
+const stepRenderers=[renderStep0,renderStep1,renderStep2,renderStep3,renderStep4,renderStep5,renderStep6];
+
+function render() {
+  renderLeft();
+  stepRenderers[currentStep]();
+  document.getElementById('stepNum').textContent=`Step ${currentStep+1} / ${STEP_TITLES.length}`;
+  document.getElementById('stepTitle').textContent=STEP_TITLES[currentStep];
+  document.getElementById('stepDesc').innerHTML=STEP_DESCS[currentStep];
+  document.querySelectorAll('.dot').forEach((d,i)=>d.classList.toggle('active',i===currentStep));
+  document.querySelectorAll('.step-labels span').forEach((s,i)=>s.classList.toggle('active',i===currentStep));
+  document.getElementById('prevBtn').disabled=currentStep===0;
+  document.getElementById('nextBtn').disabled=currentStep===STEP_TITLES.length-1;
+}
+
+// ─── BUILD NAV ────────────────────────────────────────────────────────────────
+const dotsEl=document.getElementById('dots'), labelsEl=document.getElementById('stepLabels');
+STEP_TITLES.forEach((_,i)=>{
+  const dot=document.createElement('div'); dot.className='dot';
+  dot.addEventListener('click',()=>{currentStep=i;render();}); dotsEl.appendChild(dot);
+  const lbl2=document.createElement('span'); lbl2.textContent=STEP_LABELS[i]; labelsEl.appendChild(lbl2);
+});
+
+// ─── EVENTS ───────────────────────────────────────────────────────────────────
+document.getElementById('prevBtn').addEventListener('click',()=>{if(currentStep>0){currentStep--;render();}});
+document.getElementById('nextBtn').addEventListener('click',()=>{if(currentStep<STEP_TITLES.length-1){currentStep++;render();}});
+imgCanvas.addEventListener('click',e=>{
+  const rect=imgCanvas.getBoundingClientRect(), sx=IW/rect.width, sy=IH/rect.height;
+  const col=Math.floor((e.clientX-rect.left)*sx/ICELL), row=Math.floor((e.clientY-rect.top)*sy/ICELL);
+  if(col>=0&&col<GRID&&row>=0&&row<GRID){selectedPatch=row*GRID+col;render();}
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'&&currentStep<STEP_TITLES.length-1){currentStep++;render();}
+  if(e.key==='ArrowLeft'&&currentStep>0){currentStep--;render();}
+});
+
+render();
+</script>
+</body>
+</html>
