@@ -4,7 +4,7 @@ Interactive demos for computer vision and image processing concepts. Built for t
 
 | Demo | Description | Type | Link |
 |------|-------------|------|------|
-| [Pinhole Camera](pinhole-camera/) | Explore how focal length, pixel scale, and image size affect projection | Interactive HTML | [Open](https://balakg.github.io/vision-demos/pinhole-camera/) |
+| [Pinhole Camera](pinhole-camera/) | Manipulate intrinsic and extrinsic parameters and see how a 3D scene projects onto the image plane | Interactive HTML | [Open](https://balakg.github.io/vision-demos/pinhole-camera/) |
 | [Title Waves](title-waves/) | Track how often a word or phrase appears in CVPR / NeurIPS paper titles over the years | Interactive HTML | [Open](https://balakg.github.io/vision-demos/title-waves/) |
 | Deep learning demos | Coming soon — hosted on HuggingFace Spaces | 🤗 HuggingFace | — |
 
@@ -12,8 +12,8 @@ Interactive demos for computer vision and image processing concepts. Built for t
 
 Self-contained demos — no install required, runs in the browser.
 
-- **[Pinhole Camera](pinhole-camera/)** — Manipulate intrinsic parameters (f, sₓ, sᵧ, cₓ, cᵧ) and extrinsic parameters (R, t) and see how a 3D scene projects onto the image plane. Includes a live camera matrix display.
-- **[Title Waves](title-waves/)** — Search for any word or phrase and see how its prevalence in CVPR and NeurIPS paper titles has changed from 2013 to 2026. Try "diffusion", "GAN", "transformer", or "neural radiance field".
+- **[Pinhole Camera](pinhole-camera/)** — Manipulate intrinsic and extrinsic parameters and see how a 3D scene projects onto the image plane.
+- **[Title Waves](title-waves/)** — Search for any word or phrase and see how its prevalence in CVPR and NeurIPS paper titles has changed from 2013 to 2026.
 
 ## Deep Learning Demos (HuggingFace Spaces)
 
