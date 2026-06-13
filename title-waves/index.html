@@ -127,6 +127,123 @@
     }
     .example-pill:hover { border-color: #4a4a7a; color: #8a8aaa; }
 
+    .search-hint {
+      font-size: 0.75rem;
+      color: #383858;
+      margin-top: -0.2rem;
+    }
+    .search-hint code {
+      font-family: 'Courier New', monospace;
+      color: #484868;
+      background: #181828;
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+    }
+
+    .year-panel {
+      margin-top: 1.2rem;
+      display: none;
+    }
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 0.9rem;
+      margin-bottom: 1rem;
+    }
+    .slider-label {
+      font-size: 0.85rem;
+      color: #555;
+      white-space: nowrap;
+    }
+    #yearSlider {
+      flex: 1;
+      accent-color: #5b9bd5;
+      cursor: pointer;
+      height: 4px;
+    }
+    #yearDisplay {
+      font-size: 0.95rem;
+      color: #aaa;
+      font-weight: 600;
+      min-width: 2.5rem;
+      text-align: center;
+    }
+    .year-step-btn {
+      background: #1a1a2e;
+      border: 1px solid #2a2a45;
+      color: #556;
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      font-size: 1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .year-step-btn:hover:not(:disabled) { border-color: #4a4a7a; color: #9a9abb; }
+    .year-step-btn:disabled { opacity: 0.25; cursor: default; }
+    .title-sections {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+    .title-section {
+      flex: 1;
+      min-width: 260px;
+    }
+    .title-section-header {
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-bottom: 0.55rem;
+      padding-bottom: 0.35rem;
+      border-bottom: 1px solid #1c1c30;
+    }
+    .title-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+    }
+    .title-list {
+      counter-reset: title-counter;
+    }
+    .title-list li {
+      font-size: 0.78rem;
+      color: #667;
+      line-height: 1.45;
+      padding-left: 2rem;
+      position: relative;
+      counter-increment: title-counter;
+    }
+    .title-list li::before {
+      content: counter(title-counter);
+      position: absolute;
+      left: 0;
+      width: 1.6rem;
+      text-align: right;
+      color: #334;
+      font-size: 0.72rem;
+      line-height: 1.6;
+    }
+    .show-more-btn {
+      margin-top: 0.5rem;
+      font-size: 0.74rem;
+      color: #3a3a6a;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+    }
+    .show-more-btn:hover { color: #6060aa; }
+    .no-data-note {
+      font-size: 0.78rem;
+      color: #333;
+      font-style: italic;
+    }
+
     .footer-note {
       text-align: center;
       font-size: 0.73rem;
@@ -165,10 +282,23 @@
     </div>
   </div>
 
+  <p class="search-hint">Matches whole words by default — prefix with <code>*</code> (e.g. <code>*gan</code>) to also match as part of a longer word such as "StyleGAN".</p>
+
   <div id="status"></div>
 
   <div class="chart-wrap">
     <canvas id="chart"></canvas>
+  </div>
+
+  <div class="year-panel" id="yearPanel">
+    <div class="slider-row">
+      <span class="slider-label">Browse year</span>
+      <button class="year-step-btn" id="yearPrev" title="Previous year">&#8249;</button>
+      <input type="range" id="yearSlider" min="2013" max="2026" step="1" value="2024">
+      <button class="year-step-btn" id="yearNext" title="Next year">&#8250;</button>
+      <span id="yearDisplay">2024</span>
+    </div>
+    <div class="title-sections" id="titleSections"></div>
   </div>
 
   <div class="examples">
@@ -176,6 +306,7 @@
     <button class="example-pill" data-q="diffusion">diffusion</button>
     <button class="example-pill" data-q="transformer">transformer</button>
     <button class="example-pill" data-q="GAN">GAN</button>
+    <button class="example-pill" data-q="*gan">*gan</button>
     <button class="example-pill" data-q="3D gaussian">3D gaussian</button>
     <button class="example-pill" data-q="self-supervised">self-supervised</button>
     <button class="example-pill" data-q="attention">attention</button>
@@ -184,9 +315,7 @@
 
   <p class="footer-note">
     Data from <a href="https://openaccess.thecvf.com" target="_blank">CVF Open Access</a> (CVPR) and
-    <a href="https://papers.nips.cc" target="_blank">papers.nips.cc</a> (NeurIPS) · 2013–2026 · NeurIPS 2026 not yet released ·
-    Multi-word queries match papers whose title contains the exact phrase.
-  </p>
+    <a href="https://papers.nips.cc" target="_blank">papers.nips.cc</a> (NeurIPS) · 2013–2026 · NeurIPS 2026 not yet released  </p>
 
 </div>
 <script>
@@ -231,9 +360,107 @@ function loadDB() {
 }
 
 function countMatches(stemmedTitles, query) {
-  // Stem query words then search as substring in pre-stemmed titles
-  const q = query.toLowerCase().trim().split(/\s+/).map(stemWord).join(' ');
-  return stemmedTitles.filter(t => t.includes(q)).length;
+  const raw = query.toLowerCase().trim();
+  const isSubstring = raw.startsWith('*') || raw.endsWith('*');
+  const q = raw.replace(/\*/g, '').trim().split(/\s+/).map(stemWord).join(' ');
+  if (!q) return 0;
+  if (isSubstring) {
+    return stemmedTitles.filter(t => t.includes(q)).length;
+  }
+  // Word-boundary match: query must appear as a whole word / phrase
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp('(?:^|[^a-z0-9])' + escaped + '(?:[^a-z0-9]|$)');
+  return stemmedTitles.filter(t => re.test(t)).length;
+}
+
+let _currentTerm = null;
+
+function getMatchingTitles(conf, year, rawQuery) {
+  const raw = rawQuery.toLowerCase().trim();
+  const isSubstring = raw.startsWith('*') || raw.endsWith('*');
+  const q = raw.replace(/\*/g, '').trim().split(/\s+/).map(stemWord).join(' ');
+  if (!q || !_db) return null;
+  const origTitles = _db[conf][String(year)];
+  if (origTitles === null || origTitles === undefined) return null;
+  let re;
+  if (!isSubstring) {
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    re = new RegExp('(?:^|[^a-z0-9])' + escaped + '(?:[^a-z0-9]|$)');
+  }
+  return origTitles.filter(t => {
+    const s = stemTitle(t);
+    return isSubstring ? s.includes(q) : re.test(s);
+  });
+}
+
+function sentenceCase(t) {
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+const SHOW_LIMIT = 30;
+
+function updateTitleList() {
+  if (!_currentTerm) return;
+  const slider = document.getElementById('yearSlider');
+  const year = slider.value;
+  document.getElementById('yearDisplay').textContent = year;
+  document.getElementById('yearPrev').disabled = year === slider.min;
+  document.getElementById('yearNext').disabled = year === slider.max;
+
+  const useCVPR    = document.getElementById('cvpr').checked;
+  const useNeurIPS = document.getElementById('neurips').checked;
+  const confs = [];
+  if (useCVPR)    confs.push({ key: 'cvpr',    label: 'CVPR',    color: '#5b9bd5' });
+  if (useNeurIPS) confs.push({ key: 'neurips', label: 'NeurIPS', color: '#e8824a' });
+
+  const container = document.getElementById('titleSections');
+  container.innerHTML = '';
+
+  for (const conf of confs) {
+    const titles = getMatchingTitles(conf.key, year, _currentTerm);
+    const sec = document.createElement('div');
+    sec.className = 'title-section';
+
+    const hdr = document.createElement('div');
+    hdr.className = 'title-section-header';
+    hdr.style.color = conf.color;
+
+    if (titles === null) {
+      hdr.textContent = `${conf.label} ${year}`;
+      sec.appendChild(hdr);
+      const note = document.createElement('p');
+      note.className = 'no-data-note';
+      note.textContent = 'Not yet available.';
+      sec.appendChild(note);
+    } else {
+      hdr.textContent = `${conf.label} ${year} · ${titles.length} match${titles.length !== 1 ? 'es' : ''}`;
+      sec.appendChild(hdr);
+      const visible = titles.slice(0, SHOW_LIMIT);
+      const ul = document.createElement('ul');
+      ul.className = 'title-list';
+      visible.forEach(t => {
+        const li = document.createElement('li');
+        li.textContent = sentenceCase(t);
+        ul.appendChild(li);
+      });
+      sec.appendChild(ul);
+      if (titles.length > SHOW_LIMIT) {
+        const btn = document.createElement('button');
+        btn.className = 'show-more-btn';
+        btn.textContent = `Show all ${titles.length} →`;
+        btn.addEventListener('click', () => {
+          titles.slice(SHOW_LIMIT).forEach(t => {
+            const li = document.createElement('li');
+            li.textContent = sentenceCase(t);
+            ul.appendChild(li);
+          });
+          btn.remove();
+        });
+        sec.appendChild(btn);
+      }
+    }
+    container.appendChild(sec);
+  }
 }
 
 let chart = null;
@@ -289,6 +516,9 @@ async function doSearch(term) {
     });
 
     renderChart(datasets, term, normalize);
+    _currentTerm = term;
+    document.getElementById('yearPanel').style.display = 'block';
+    updateTitleList();
     setStatus('');
   } catch (e) {
     setStatus(e.message, 'error');
@@ -375,6 +605,16 @@ function initPlaceholder() {
   });
 }
 
+document.getElementById('yearSlider').addEventListener('input', updateTitleList);
+
+function stepYear(delta) {
+  const slider = document.getElementById('yearSlider');
+  slider.value = Math.min(Math.max(parseInt(slider.value) + delta, parseInt(slider.min)), parseInt(slider.max));
+  updateTitleList();
+}
+
+document.getElementById('yearPrev').addEventListener('click', () => stepYear(-1));
+document.getElementById('yearNext').addEventListener('click', () => stepYear(1));
 document.getElementById('searchBtn').addEventListener('click', () => doSearch());
 document.getElementById('query').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
 document.querySelectorAll('.example-pill').forEach(btn => {
