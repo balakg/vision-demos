@@ -13,7 +13,7 @@ Interactive demos for computer vision and image processing concepts. Built for t
 Self-contained demos — no install required, runs in the browser.
 
 - **[Pinhole Camera](pinhole-camera/)** — Manipulate intrinsic and extrinsic parameters and see how a 3D scene projects onto the image plane.
-- **[Title Waves](title-waves/)** — Search for any word or phrase and see how its prevalence in CVPR and NeurIPS paper titles has changed from 2013 to 2026.
+- **[Title Waves](title-waves/)** — Search for any word or phrase and see how its prevalence in CVPR and NeurIPS paper titles has changed over the years.
 
 ## Deep Learning Demos (HuggingFace Spaces)
 
