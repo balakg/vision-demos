@@ -433,10 +433,30 @@ const VENUES = {
 // Light suffix stemmer — strips common English inflections so that
 // "corners"/"corner", "detecting"/"detected", "approaches"/"approach" all match.
 function stemWord(w) {
-  if (w.length > 5 && w.endsWith('ing'))  return w.slice(0, -3);
+  if (w.length > 5 && w.endsWith('ing')) {
+    const stem = w.slice(0, -3);
+    // De-double final consonant (mapping→mapp→map, fitting→fitt→fit)
+    // Exclude 'l' and 's' which are often intrinsic doubles (calling, missing)
+    const c = stem[stem.length - 1];
+    if (stem.length >= 2 && stem[stem.length - 2] === c && c !== 'l' && c !== 's')
+      return stem.slice(0, -1);
+    return stem;
+  }
   if (w.length > 4 && w.endsWith('ies'))  return w.slice(0, -3) + 'y';
-  if (w.length > 4 && w.endsWith('ed'))   return w.slice(0, -2);
-  if (w.length > 5 && w.endsWith('es'))   return w.slice(0, -2);
+  if (w.length > 4 && w.endsWith('ed')) {
+    const stem = w.slice(0, -2);
+    const c = stem[stem.length - 1];
+    if (stem.length >= 2 && stem[stem.length - 2] === c && c !== 'l' && c !== 's')
+      return stem.slice(0, -1);
+    return stem;
+  }
+  if (w.length > 5 && w.endsWith('es')) {
+    // If removing just 's' leaves a stem ending in consonant+e (silent-e pattern),
+    // strip only the 's' (bounces→bounce, images→image, sequences→sequence)
+    const s = w.slice(0, -1);
+    if (/[cgvtdnrkpzbmf]e$/.test(s)) return s;
+    return w.slice(0, -2);
+  }
   if (w.length > 3 && w.endsWith('s') && !w.endsWith('ss')) return w.slice(0, -1);
   return w;
 }
