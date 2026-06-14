@@ -355,8 +355,9 @@
 
     <ul class="search-hint">
       <li>Case-insensitive.</li>
-      <li>Matches whole words by default. Prefix with <code>*</code> (e.g. <code>*gan</code>) to match inside longer words such as "StyleGAN".</li>
+      <li>Matches whole words by default. Use <code>*</code> to match inside longer words (e.g. <code>*gan</code> matches "StyleGAN").</li>
       <li>Separate terms with commas to require all of them (e.g. <code>diffusion, video</code>).</li>
+      <li>Common suffixes (-ing, -ed, -s) are stripped, so "detect" matches "detecting", "detected", etc.</li>
     </ul>
 
     <div id="status"></div>
