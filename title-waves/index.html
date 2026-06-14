@@ -733,7 +733,8 @@ function buildWordFreq() {
       const counts = {};
       for (const title of titles) {
         const words = title.toLowerCase().replace(/[^a-z0-9 -]/g, ' ').split(/\s+/)
-          .filter(w => w.length > 2 && !w.startsWith('-') && !w.endsWith('-') && !STOP_WORDS.has(w));
+          .filter(w => w.length > 2 && !w.startsWith('-') && !w.endsWith('-') && !STOP_WORDS.has(w))
+          .map(stemWord);
         for (const w of words) counts[w] = (counts[w] || 0) + 1;
       }
       _wordFreq[conf][yr] = counts;
