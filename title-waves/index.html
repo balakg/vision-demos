@@ -265,7 +265,7 @@
 <div class="container">
 
   <h1>Title Waves</h1>
-  <p class="subtitle">How often does a word or phrase appear in major CV/ML conference paper titles over the years?</p>
+  <p class="subtitle">How often do words or phrases appear in major CV/ML conference paper titles over the years?</p>
 
   <div class="controls">
     <div class="search-row">
@@ -291,13 +291,14 @@
     </div>
   </div>
 
-  <p class="search-hint">Matches whole words by default — prefix with <code>*</code> (e.g. <code>*gan</code>) to also match as part of a longer word such as "StyleGAN".</p>
+  <p class="search-hint">Matches whole words by default — prefix with <code>*</code> (e.g. <code>*gan</code>) to match inside longer words such as "StyleGAN". Separate terms with commas to require all of them (e.g. <code>diffusion, video</code>).</p>
 
   <div id="status"></div>
 
   <div class="chart-wrap">
     <canvas id="chart"></canvas>
   </div>
+
 
   <div class="year-panel" id="yearPanel">
     <div class="slider-row">
@@ -321,6 +322,7 @@
     <button class="example-pill" data-q="self-supervised">self-supervised</button>
     <button class="example-pill" data-q="attention">attention</button>
     <button class="example-pill" data-q="neural radiance field">neural radiance field</button>
+    <button class="example-pill" data-q="diffusion, video">diffusion, video</button>
   </div>
 
   <p class="footer-note">
@@ -370,39 +372,34 @@ function loadDB() {
   return { db: _db, stemmed: _stemmed };
 }
 
-function countMatches(stemmedTitles, query) {
-  const raw = query.toLowerCase().trim();
+function parseTerms(query) {
+  return query.split(',').map(t => t.trim()).filter(Boolean);
+}
+
+function matchesTerm(stemmedTitle, rawTerm) {
+  const raw = rawTerm.toLowerCase().trim();
   const isSubstring = raw.startsWith('*') || raw.endsWith('*');
   const q = raw.replace(/\*/g, '').trim().split(/\s+/).map(stemWord).join(' ');
-  if (!q) return 0;
-  if (isSubstring) {
-    return stemmedTitles.filter(t => t.includes(q)).length;
-  }
-  // Word-boundary match: query must appear as a whole word / phrase
+  if (!q) return false;
+  if (isSubstring) return stemmedTitle.includes(q);
   const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const re = new RegExp('(?:^|[^a-z0-9])' + escaped + '(?:[^a-z0-9]|$)');
-  return stemmedTitles.filter(t => re.test(t)).length;
+  return new RegExp('(?:^|[^a-z0-9])' + escaped + '(?:[^a-z0-9]|$)').test(stemmedTitle);
+}
+
+function countMatches(stemmedTitles, query) {
+  const terms = parseTerms(query);
+  return stemmedTitles.filter(t => terms.every(term => matchesTerm(t, term))).length;
 }
 
 let _currentTerm = null;
 let _activeConf = null;
 
 function getMatchingTitles(conf, year, rawQuery) {
-  const raw = rawQuery.toLowerCase().trim();
-  const isSubstring = raw.startsWith('*') || raw.endsWith('*');
-  const q = raw.replace(/\*/g, '').trim().split(/\s+/).map(stemWord).join(' ');
-  if (!q || !_db) return null;
+  if (!_db) return null;
   const origTitles = _db[conf][String(year)];
   if (origTitles === null || origTitles === undefined) return null;
-  let re;
-  if (!isSubstring) {
-    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    re = new RegExp('(?:^|[^a-z0-9])' + escaped + '(?:[^a-z0-9]|$)');
-  }
-  return origTitles.filter(t => {
-    const s = stemTitle(t);
-    return isSubstring ? s.includes(q) : re.test(s);
-  });
+  const terms = parseTerms(rawQuery);
+  return origTitles.filter(t => terms.every(term => matchesTerm(stemTitle(t), term)));
 }
 
 function sentenceCase(t) {
@@ -485,13 +482,34 @@ function setStatus(msg, cls = '') {
   el.className = cls;
 }
 
+function buildDatasets(selected, term, stemmed, db, normalize) {
+  return selected.map(venue => {
+    const values = YEARS.map(y => {
+      const st = stemmed[venue.key][String(y)];
+      if (st === null || st === undefined) return null;
+      const count = countMatches(st, term);
+      if (normalize) {
+        const total = db[venue.key][String(y)]?.length ?? 0;
+        return total > 0 ? parseFloat((count / total * 100).toFixed(3)) : 0;
+      }
+      return count;
+    });
+    return {
+      label: venue.label, data: values,
+      borderColor: venue.color, backgroundColor: venue.color + '15',
+      pointBackgroundColor: venue.color,
+      borderWidth: 2.5, tension: 0.35, pointRadius: 4, pointHoverRadius: 7,
+      spanGaps: venue.spanGaps ?? false, fill: false,
+    };
+  });
+}
+
 async function doSearch(term) {
   term = (term || document.getElementById('query').value).trim();
   if (!term) { setStatus('Enter a word or phrase.', 'error'); return; }
 
-  const normalize  = document.getElementById('normalize').checked;
+  const normalize = document.getElementById('normalize').checked;
   const selected = Object.values(VENUES).filter(v => document.getElementById(v.key).checked);
-
   if (!selected.length) { setStatus('Select at least one conference.', 'error'); return; }
 
   document.getElementById('query').value = term;
@@ -499,34 +517,7 @@ async function doSearch(term) {
 
   try {
     const { db, stemmed } = loadDB();
-
-    const datasets = selected.map(venue => {
-      const values = YEARS.map(y => {
-        const st = stemmed[venue.key][String(y)];
-        if (st === null || st === undefined) return null;
-        const count = countMatches(st, term);
-        if (normalize) {
-          const total = db[venue.key][String(y)]?.length ?? 0;
-          return total > 0 ? parseFloat((count / total * 100).toFixed(3)) : 0;
-        }
-        return count;
-      });
-      return {
-        label: venue.label,
-        data: values,
-        borderColor: venue.color,
-        backgroundColor: venue.color + '15',
-        pointBackgroundColor: venue.color,
-        borderWidth: 2.5,
-        tension: 0.35,
-        pointRadius: 4,
-        pointHoverRadius: 7,
-        spanGaps: venue.spanGaps ?? false,
-        fill: false,
-      };
-    });
-
-    renderChart(datasets, selected, term, normalize);
+    renderChart(buildDatasets(selected, term, stemmed, db, normalize), selected, term, normalize);
     _currentTerm = term;
     document.getElementById('yearPanel').style.display = 'block';
     updateTitleList();
@@ -542,15 +533,15 @@ function renderChart(datasets, venues, term, normalize) {
   _chartVenues = venues;
   if (chart) chart.destroy();
   const ctx = document.getElementById('chart').getContext('2d');
-
-  chart = new Chart(ctx, {
+  let instance;
+  instance = new Chart(ctx, {
     type: 'line',
     data: { labels: YEARS, datasets },
     options: {
       responsive: true,
       interaction: { mode: 'index', intersect: false },
       onClick: (e) => {
-        const nearest = chart.getElementsAtEventForMode(e.native, 'nearest', { intersect: false }, false);
+        const nearest = instance.getElementsAtEventForMode(e.native, 'nearest', { intersect: false }, false);
         if (!nearest.length) return;
         const { datasetIndex, index } = nearest[0];
         const slider = document.getElementById('yearSlider');
@@ -606,19 +597,17 @@ function renderChart(datasets, venues, term, normalize) {
       }
     }
   });
+  chart = instance;
 }
 
 function initPlaceholder() {
-  const ctx = document.getElementById('chart').getContext('2d');
-  chart = new Chart(ctx, {
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('chart').getContext('2d'), {
     type: 'line',
     data: { labels: YEARS, datasets: [] },
     options: {
       responsive: true,
-      plugins: {
-        legend: { display: false },
-        title: { display: false },
-      },
+      plugins: { legend: { display: false }, title: { display: false } },
       scales: {
         x: { ticks: { color: '#252535' }, grid: { color: '#14142a' } },
         y: { ticks: { color: '#252535' }, grid: { color: '#14142a' }, beginAtZero: true }
