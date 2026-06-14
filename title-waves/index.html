@@ -321,14 +321,6 @@
   <h1>Title Waves</h1>
   <p class="subtitle">How often do words or phrases appear in major CV/ML conference paper titles over the years?</p>
 
-  <div class="shared-controls">
-    <div class="conf-group">
-      <label class="toggle-label cvpr-label"><input type="checkbox" id="cvpr" checked> CVPR</label>
-      <label class="toggle-label iccv-label"><input type="checkbox" id="iccv" checked> ICCV</label>
-      <label class="toggle-label neurips-label"><input type="checkbox" id="neurips" checked> NeurIPS</label>
-    </div>
-  </div>
-
   <div class="top-tabs">
     <button class="top-tab active" id="topTabSearch">Search</button>
     <button class="top-tab" id="topTabTrending">Trending</button>
@@ -342,6 +334,12 @@
         <button id="searchBtn">Search</button>
       </div>
       <div class="options-row">
+        <div class="conf-group">
+          <label class="toggle-label cvpr-label"><input type="checkbox" id="cvpr" checked> CVPR</label>
+          <label class="toggle-label iccv-label"><input type="checkbox" id="iccv" checked> ICCV</label>
+          <label class="toggle-label neurips-label"><input type="checkbox" id="neurips" checked> NeurIPS</label>
+        </div>
+        <div class="divider"></div>
         <label class="toggle-label">
           <input type="checkbox" id="normalize"> show as % of all papers
         </label>
@@ -390,6 +388,10 @@
         <input type="range" id="trendSlider" min="2014" max="2026" step="1" value="2026">
         <button class="year-step-btn" id="trendNext" title="Next year">&#8250;</button>
         <span id="trendYearDisplay">2026</span>
+      </div>
+      <div class="conf-group" style="margin-bottom:0.5rem">
+        <label class="toggle-label cvpr-label"><input type="checkbox" id="trend-cvpr" checked> CVPR</label>
+        <label class="toggle-label neurips-label"><input type="checkbox" id="trend-neurips" checked> NeurIPS</label>
       </div>
       <div class="sort-tabs">
         <button class="sort-tab active" data-sort="absolute">Count change</button>
@@ -720,11 +722,13 @@ const STOP_WORDS = new Set([
 ]);
 
 let _wordFreq = null;
+let _displayForms = null;  // stem -> most frequent original form across all data
 
 function buildWordFreq() {
   if (_wordFreq) return;
   loadDB();
   _wordFreq = {};
+  const origFormCounts = {};  // stem -> { origWord: count }
   for (const conf of Object.keys(_db)) {
     _wordFreq[conf] = {};
     for (const yr of Object.keys(_db[conf])) {
@@ -733,12 +737,32 @@ function buildWordFreq() {
       const counts = {};
       for (const title of titles) {
         const words = title.toLowerCase().replace(/[^a-z0-9 -]/g, ' ').split(/\s+/)
-          .filter(w => w.length > 2 && !w.startsWith('-') && !w.endsWith('-') && !STOP_WORDS.has(w))
-          .map(stemWord);
-        for (const w of words) counts[w] = (counts[w] || 0) + 1;
+          .filter(w => w.length > 2 && !w.startsWith('-') && !w.endsWith('-') && !STOP_WORDS.has(w));
+        for (const w of words) {
+          const stem = stemWord(w);
+          counts[stem] = (counts[stem] || 0) + 1;
+          if (!origFormCounts[stem]) origFormCounts[stem] = {};
+          origFormCounts[stem][w] = (origFormCounts[stem][w] || 0) + 1;
+          // Also count each hyphen-separated part, mirroring the search tab's
+          // word-boundary regex which treats '-' as a boundary.
+          if (w.includes('-')) {
+            for (const part of w.split('-')) {
+              if (part.length > 2 && !STOP_WORDS.has(part)) {
+                const partStem = stemWord(part);
+                counts[partStem] = (counts[partStem] || 0) + 1;
+                if (!origFormCounts[partStem]) origFormCounts[partStem] = {};
+                origFormCounts[partStem][part] = (origFormCounts[partStem][part] || 0) + 1;
+              }
+            }
+          }
+        }
       }
       _wordFreq[conf][yr] = counts;
     }
+  }
+  _displayForms = {};
+  for (const [stem, forms] of Object.entries(origFormCounts)) {
+    _displayForms[stem] = Object.entries(forms).sort((a, b) => b[1] - a[1])[0][0];
   }
 }
 
@@ -792,7 +816,7 @@ function renderTrending() {
   document.getElementById('trendPrev').disabled = slider.value === slider.min;
   document.getElementById('trendNext').disabled = slider.value === slider.max;
 
-  const confKeys = Object.values(VENUES).filter(v => document.getElementById(v.key).checked).map(v => v.key);
+  const confKeys = ['cvpr', 'neurips'].filter(k => document.getElementById('trend-' + k).checked);
   const content = document.getElementById('trendContent');
 
   if (!confKeys.length) {
@@ -823,11 +847,12 @@ function renderTrending() {
     items.forEach((x, i) => {
       const li = document.createElement('li');
       li.className = 'trend-item';
+      const displayWord = _displayForms[x.word] || x.word;
       const rank  = document.createElement('span'); rank.className  = 'trend-rank';   rank.textContent  = `${i+1}.`;
-      const word  = document.createElement('span'); word.className  = 'trend-word';   word.textContent  = x.word;
+      const word  = document.createElement('span'); word.className  = 'trend-word';   word.textContent  = displayWord;
       const delta = document.createElement('span'); delta.className = `trend-change ${cls}`; delta.textContent = fmt(x);
       const cnts  = document.createElement('span'); cnts.className  = 'trend-counts'; cnts.textContent  = fmtCounts(x);
-      word.addEventListener('click', () => { setTopTab('search'); doSearch(x.word); });
+      word.addEventListener('click', () => { setTopTab('search'); doSearch(displayWord); });
       li.append(rank, word, delta, cnts);
       ul.appendChild(li);
     });
@@ -892,10 +917,8 @@ document.getElementById('trendNext').addEventListener('click', () => {
   s.value = Math.min(parseInt(s.value) + 1, parseInt(s.max));
   renderTrending();
 });
-['cvpr','iccv','neurips'].forEach(id => {
-  document.getElementById(id).addEventListener('change', () => {
-    if (_activeTopTab === 'trending') renderTrending();
-  });
+['trend-cvpr','trend-neurips'].forEach(id => {
+  document.getElementById(id).addEventListener('change', renderTrending);
 });
 
 initPlaceholder();
