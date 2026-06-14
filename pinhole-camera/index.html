@@ -627,7 +627,7 @@ function initOrbitDrag(canvas) {
   function onMove(x,y){
     if(!dragging) return;
     _orbAz  += (x-lastX)*SENS;
-    _orbEl  -= (y-lastY)*SENS;
+    _orbEl  += (y-lastY)*SENS;
     lastX=x; lastY=y;
     renderAll();
   }
