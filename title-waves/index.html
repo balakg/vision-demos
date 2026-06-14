@@ -289,6 +289,9 @@
     .trending-controls { margin-bottom: 1.2rem; }
     .trend-cols { display: flex; gap: 2rem; margin-top: 0.5rem; }
     .trend-col { flex: 1; min-width: 0; }
+    @media (max-width: 520px) {
+      .trend-cols { flex-direction: column; gap: 1.5rem; }
+    }
     .trend-col-header {
       font-size: 0.8rem; font-weight: 600;
       margin-bottom: 0.6rem; padding-bottom: 0.35rem;
