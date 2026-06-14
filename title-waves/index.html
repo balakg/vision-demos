@@ -133,6 +133,10 @@
       font-size: 0.75rem;
       color: #6a6a8a;
       margin-top: -0.2rem;
+      padding-left: 1.1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.18rem;
     }
     .search-hint code {
       font-family: 'Courier New', monospace;
@@ -349,7 +353,11 @@
       </div>
     </div>
 
-    <p class="search-hint">Case-insensitive. Matches whole words by default — prefix with <code>*</code> (e.g. <code>*gan</code>) to match inside longer words such as "StyleGAN". Separate terms with commas to require all of them (e.g. <code>diffusion, video</code>).</p>
+    <ul class="search-hint">
+      <li>Case-insensitive.</li>
+      <li>Matches whole words by default. Prefix with <code>*</code> (e.g. <code>*gan</code>) to match inside longer words such as "StyleGAN".</li>
+      <li>Separate terms with commas to require all of them (e.g. <code>diffusion, video</code>).</li>
+    </ul>
 
     <div id="status"></div>
 
@@ -897,7 +905,7 @@ document.getElementById('topTabTrending').addEventListener('click', () => setTop
 document.getElementById('trendSlider').addEventListener('input', renderTrending);
 const SORT_DESCS = {
   absolute: 'How many more papers contain this word compared to the previous year.',
-  share:    'Change in share of conference papers containing this word — accounts for conference growth.',
+  share:    'Change in share of conference papers containing this word (accounts for conference growth).',
   relative: 'How much the word count grew relative to its previous year count.',
 };
 
