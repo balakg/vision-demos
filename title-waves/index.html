@@ -405,6 +405,7 @@
         <label class="toggle-label cvpr-label"><input type="checkbox" id="trend-cvpr" checked> CVPR</label>
         <label class="toggle-label neurips-label"><input type="checkbox" id="trend-neurips" checked> NeurIPS</label>
       </div>
+      <p id="trendDataNote" class="trend-sort-desc" style="margin:0 0 0.5rem;font-style:normal;display:none"></p>
       <div class="sort-tabs">
         <button class="sort-tab active" data-sort="absolute">Count change</button>
         <button class="sort-tab" data-sort="share">Share change</button>
@@ -828,8 +829,20 @@ function renderTrending() {
   document.getElementById('trendPrev').disabled = slider.value === slider.min;
   document.getElementById('trendNext').disabled = slider.value === slider.max;
 
+  buildWordFreq();
   const confKeys = ['cvpr', 'neurips'].filter(k => document.getElementById('trend-' + k).checked);
   const content = document.getElementById('trendContent');
+
+  // Show note for any checked conference missing data in the selected year
+  const missing = confKeys.filter(k => !_wordFreq?.[k]?.[String(year)]);
+  const noteEl = document.getElementById('trendDataNote');
+  if (missing.length) {
+    const labels = { cvpr: 'CVPR', neurips: 'NeurIPS' };
+    noteEl.textContent = missing.map(k => `${labels[k]} data not yet available for ${year}.`).join(' ');
+    noteEl.style.display = '';
+  } else {
+    noteEl.style.display = 'none';
+  }
 
   if (!confKeys.length) {
     content.innerHTML = '<p class="no-data-note">Select at least one conference.</p>';
