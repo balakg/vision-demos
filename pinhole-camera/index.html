@@ -369,7 +369,28 @@ function getFrustum() {
 // =============================================================
 // WORLD VIEW RENDERER
 // =============================================================
-const OBS={eye:[14,10,-14],target:[0,0,-2],up:[0,1,0],fov:60};
+// Orbit state: spherical coords around OBS.target
+const OBS_TARGET=[0,0,-2];
+const OBS_FOV=60;
+let _orbRadius, _orbAz, _orbEl;
+
+function initOrbit() {
+  const dx=14-OBS_TARGET[0], dy=10-OBS_TARGET[1], dz=-14-OBS_TARGET[2];
+  _orbRadius=Math.hypot(dx,dy,dz);
+  _orbAz=Math.atan2(dx,-dz);        // azimuth in XZ plane
+  _orbEl=Math.asin(dy/_orbRadius);  // elevation
+}
+
+function orbEye() {
+  const el=Math.max(-Math.PI/2+0.05, Math.min(Math.PI/2-0.05, _orbEl));
+  return [
+    OBS_TARGET[0]+_orbRadius*Math.cos(el)*Math.sin(_orbAz),
+    OBS_TARGET[1]+_orbRadius*Math.sin(el),
+    OBS_TARGET[2]-_orbRadius*Math.cos(el)*Math.cos(_orbAz),
+  ];
+}
+
+const OBS={get eye(){return orbEye();},target:OBS_TARGET,up:[0,1,0],fov:OBS_FOV};
 let obsF,obsR,obsU;
 
 function buildObs() {
@@ -580,6 +601,7 @@ function initUI() {
 
 function resetAll() {
   P={...DEFAULTS};
+  initOrbit();
   SLIDERS.forEach(([id,key,fmt])=>{
     document.getElementById(`s-${id}`).value=P[key];
     document.getElementById(`v-${id}`).textContent=fmt(P[key]);
@@ -593,14 +615,40 @@ function resetAll() {
 // =============================================================
 let wCanvas, iCanvas;
 
+function initOrbitDrag(canvas) {
+  let dragging=false, lastX=0, lastY=0;
+  const SENS=0.006;
+
+  function onDown(x,y){ dragging=true; lastX=x; lastY=y; canvas.style.cursor='grabbing'; }
+  function onMove(x,y){
+    if(!dragging) return;
+    _orbAz  += (x-lastX)*SENS;
+    _orbEl  -= (y-lastY)*SENS;
+    lastX=x; lastY=y;
+    renderAll();
+  }
+  function onUp(){ dragging=false; canvas.style.cursor='grab'; }
+
+  canvas.addEventListener('mousedown', e=>onDown(e.clientX,e.clientY));
+  window.addEventListener('mousemove', e=>onMove(e.clientX,e.clientY));
+  window.addEventListener('mouseup',   onUp);
+
+  canvas.addEventListener('touchstart', e=>{e.preventDefault();const t=e.touches[0];onDown(t.clientX,t.clientY);},{passive:false});
+  window.addEventListener('touchmove',  e=>{if(!dragging)return;e.preventDefault();const t=e.touches[0];onMove(t.clientX,t.clientY);},{passive:false});
+  window.addEventListener('touchend',   onUp);
+
+  canvas.style.cursor='grab';
+}
+
 window.addEventListener('load',()=>{
   wCanvas=document.getElementById('wc');
   iCanvas=document.getElementById('ic');
-  // Size world canvas to fill its container
   const wWrap=wCanvas.parentElement;
   wCanvas.width=wWrap.clientWidth-20;
   wCanvas.height=wWrap.clientHeight-20;
+  initOrbit();
   initUI();
+  initOrbitDrag(wCanvas);
   renderAll();
 });
 
