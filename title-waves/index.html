@@ -271,6 +271,21 @@
     .top-tab.active { color: #aaa; border-bottom-color: #aaa; }
     .top-tab:not(.active):hover { color: #778; }
 
+    .sort-tabs { display: flex; gap: 0.4rem; margin-top: 0.7rem; }
+    .sort-tab {
+      background: none;
+      border: 1px solid #252540;
+      border-radius: 3px;
+      color: #445;
+      padding: 0.22rem 0.65rem;
+      font-size: 0.77rem;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+    .sort-tab.active { color: #aaa; border-color: #555; background: #1a1a2e; }
+    .sort-tab:not(.active):hover { color: #778; border-color: #334; }
+
+    .trend-sort-desc { color: #445; font-size: 0.75rem; margin: 0.45rem 0 0; font-style: italic; }
     .trending-controls { margin-bottom: 1.2rem; }
     .trend-cols { display: flex; gap: 2rem; margin-top: 0.5rem; }
     .trend-col { flex: 1; min-width: 0; }
@@ -362,8 +377,7 @@
       <button class="example-pill" data-q="3D gaussian">3D gaussian</button>
       <button class="example-pill" data-q="self-supervised">self-supervised</button>
       <button class="example-pill" data-q="attention">attention</button>
-      <button class="example-pill" data-q="neural radiance field">neural radiance field</button>
-      <button class="example-pill" data-q="diffusion, video">diffusion, video</button>
+<button class="example-pill" data-q="diffusion, video">diffusion, video</button>
     </div>
   </div>
 
@@ -373,13 +387,16 @@
       <div class="slider-row">
         <span class="slider-label">Year</span>
         <button class="year-step-btn" id="trendPrev" title="Previous year">&#8249;</button>
-        <input type="range" id="trendSlider" min="2014" max="2026" step="1" value="2025">
+        <input type="range" id="trendSlider" min="2014" max="2026" step="1" value="2026">
         <button class="year-step-btn" id="trendNext" title="Next year">&#8250;</button>
-        <span id="trendYearDisplay">2025</span>
+        <span id="trendYearDisplay">2026</span>
       </div>
-      <label class="toggle-label" style="margin-top:0.6rem">
-        <input type="checkbox" id="trendNormalize"> show as % of all papers
-      </label>
+      <div class="sort-tabs">
+        <button class="sort-tab active" data-sort="absolute">Count change</button>
+        <button class="sort-tab" data-sort="share">Share change</button>
+        <button class="sort-tab" data-sort="relative">Relative growth</button>
+      </div>
+      <p id="trendSortDesc" class="trend-sort-desc"></p>
     </div>
     <div id="trendContent"></div>
   </div>
@@ -715,8 +732,8 @@ function buildWordFreq() {
       if (!titles) { _wordFreq[conf][yr] = null; continue; }
       const counts = {};
       for (const title of titles) {
-        const words = title.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/)
-          .filter(w => w.length > 2 && !STOP_WORDS.has(w));
+        const words = title.toLowerCase().replace(/[^a-z0-9 -]/g, ' ').split(/\s+/)
+          .filter(w => w.length > 2 && !w.startsWith('-') && !w.endsWith('-') && !STOP_WORDS.has(w));
         for (const w of words) counts[w] = (counts[w] || 0) + 1;
       }
       _wordFreq[conf][yr] = counts;
@@ -724,15 +741,15 @@ function buildWordFreq() {
   }
 }
 
-function getTopChanges(year, confKeys, useNormalized) {
+function getTopChanges(year, confKeys, sortMode) {
   buildWordFreq();
   const prevYear = String(year - 1);
   const curYear  = String(year);
 
-  function aggregate(yr) {
+  function aggregate(yr, confs) {
     const totals = {};
     let paperTotal = 0;
-    for (const conf of confKeys) {
+    for (const conf of confs) {
       const freqMap = _wordFreq[conf]?.[yr];
       if (!freqMap) continue;
       paperTotal += _db[conf][yr]?.length ?? 0;
@@ -741,16 +758,23 @@ function getTopChanges(year, confKeys, useNormalized) {
     return { totals, paperTotal };
   }
 
-  const { totals: prev, paperTotal: prevTotal } = aggregate(prevYear);
-  const { totals: cur,  paperTotal: curTotal  } = aggregate(curYear);
+  const validConfs = confKeys.filter(conf => _wordFreq[conf]?.[prevYear] && _wordFreq[conf]?.[curYear]);
+  const { totals: prev, paperTotal: prevTotal } = aggregate(prevYear, validConfs);
+  const { totals: cur,  paperTotal: curTotal  } = aggregate(curYear,  validConfs);
 
   const changes = [];
   for (const w of new Set([...Object.keys(prev), ...Object.keys(cur)])) {
     const c0 = prev[w] ?? 0, c1 = cur[w] ?? 0;
     if (c1 < 5 && c0 < 5) continue;
-    const delta = useNormalized
-      ? (curTotal  > 0 ? c1 / curTotal  * 100 : 0) - (prevTotal > 0 ? c0 / prevTotal * 100 : 0)
-      : c1 - c0;
+    let delta;
+    if (sortMode === 'absolute') {
+      delta = c1 - c0;
+    } else if (sortMode === 'share') {
+      delta = (curTotal > 0 ? c1 / curTotal * 100 : 0) - (prevTotal > 0 ? c0 / prevTotal * 100 : 0);
+    } else { // relative
+      if (c0 === 0) continue;
+      delta = (c1 - c0) / c0 * 100;
+    }
     changes.push({ word: w, delta, c0, c1, prevTotal, curTotal });
   }
 
@@ -767,7 +791,6 @@ function renderTrending() {
   document.getElementById('trendPrev').disabled = slider.value === slider.min;
   document.getElementById('trendNext').disabled = slider.value === slider.max;
 
-  const useNormalized = document.getElementById('trendNormalize').checked;
   const confKeys = Object.values(VENUES).filter(v => document.getElementById(v.key).checked).map(v => v.key);
   const content = document.getElementById('trendContent');
 
@@ -776,16 +799,18 @@ function renderTrending() {
     return;
   }
 
-  const { rising, falling } = getTopChanges(year, confKeys, useNormalized);
+  const { rising, falling } = getTopChanges(year, confKeys, _trendSortMode);
 
   function fmt(x) {
-    if (useNormalized) return `${x.delta > 0 ? '+' : ''}${x.delta.toFixed(2)}%`;
-    return `${x.delta > 0 ? '+' : ''}${x.delta}`;
+    const sign = x.delta > 0 ? '+' : '';
+    if (_trendSortMode === 'absolute') return `${sign}${Math.round(x.delta)}`;
+    if (_trendSortMode === 'share')    return `${sign}${x.delta.toFixed(2)}%`;
+    return `${sign}${x.delta.toFixed(0)}%`;
   }
   function fmtCounts(x) {
-    if (useNormalized) {
-      const p0 = x.prevTotal > 0 ? (x.c0/x.prevTotal*100).toFixed(2) : '0.00';
-      const p1 = x.curTotal  > 0 ? (x.c1/x.curTotal *100).toFixed(2) : '0.00';
+    if (_trendSortMode === 'share') {
+      const p0 = x.prevTotal > 0 ? (x.c0 / x.prevTotal * 100).toFixed(2) : '0.00';
+      const p1 = x.curTotal  > 0 ? (x.c1 / x.curTotal  * 100).toFixed(2) : '0.00';
       return `${p0}%→${p1}%`;
     }
     return `${x.c0}→${x.c1}`;
@@ -822,7 +847,8 @@ function renderTrending() {
   document.getElementById('trendFallingList').appendChild(buildList(falling, 'trend-down'));
 }
 
-let _activeTopTab = 'search';
+let _activeTopTab  = 'search';
+let _trendSortMode = 'absolute';
 
 function setTopTab(tab) {
   _activeTopTab = tab;
@@ -836,7 +862,25 @@ function setTopTab(tab) {
 document.getElementById('topTabSearch').addEventListener('click', () => setTopTab('search'));
 document.getElementById('topTabTrending').addEventListener('click', () => setTopTab('trending'));
 document.getElementById('trendSlider').addEventListener('input', renderTrending);
-document.getElementById('trendNormalize').addEventListener('change', renderTrending);
+const SORT_DESCS = {
+  absolute: 'How many more papers contain this word compared to the previous year.',
+  share:    'Change in share of conference papers containing this word — accounts for conference growth.',
+  relative: 'How much the word count grew relative to its previous year count.',
+};
+
+function updateSortDesc() {
+  document.getElementById('trendSortDesc').textContent = SORT_DESCS[_trendSortMode];
+}
+
+document.querySelectorAll('.sort-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    _trendSortMode = btn.dataset.sort;
+    document.querySelectorAll('.sort-tab').forEach(b => b.classList.toggle('active', b === btn));
+    updateSortDesc();
+    renderTrending();
+  });
+});
+updateSortDesc();
 document.getElementById('trendPrev').addEventListener('click', () => {
   const s = document.getElementById('trendSlider');
   s.value = Math.max(parseInt(s.value) - 1, parseInt(s.min));
