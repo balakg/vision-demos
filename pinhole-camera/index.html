@@ -50,7 +50,7 @@
     .matrix-subtitle { color: #8b949e; font-size: 10px; margin-bottom: 4px; }
     .mrow { display: flex; justify-content: center; gap: 2px; margin: 1px 0; }
     .mc   { width: 52px; text-align: right; color: #58a6ff; }
-    .mc-t { color: #f85149; }
+    .mc-t { color: #58a6ff; }
     .mbracket { color: #555; font-size: 22px; line-height: 1.0; display: flex; align-items: center; }
 
     .equation-box {
@@ -108,7 +108,7 @@
     </div>
 
     <div>
-      <div class="section-title">Intrinsics — Focal Length</div>
+      <div class="section-title">Intrinsics</div>
       <div class="slider-row">
         <div class="slider-label"><span class="slider-name">f  (focal length)</span><span class="slider-val" id="v-f">500</span></div>
         <input type="range" id="s-f" min="50" max="1500" value="500" step="10">
@@ -125,16 +125,12 @@
         f<sub>x</sub> = f·s<sub>x</sub> = <span class="dn-val" id="dn-fx">500</span> &nbsp;|&nbsp;
         f<sub>y</sub> = f·s<sub>y</sub> = <span class="dn-val" id="dn-fy">500</span>
       </div>
-    </div>
-
-    <div>
-      <div class="section-title">Intrinsics — Image Size</div>
-      <div class="slider-row">
-        <div class="slider-label"><span class="slider-name">c<sub>x</sub> = W/2  (half-width)</span><span class="slider-val" id="v-cx">320</span></div>
+      <div class="slider-row" style="margin-top:8px">
+        <div class="slider-label"><span class="slider-name">c<sub>x</sub>  (principal point x)</span><span class="slider-val" id="v-cx">320</span></div>
         <input type="range" id="s-cx" min="80" max="560" value="320" step="5">
       </div>
       <div class="slider-row">
-        <div class="slider-label"><span class="slider-name">c<sub>y</sub> = H/2  (half-height)</span><span class="slider-val" id="v-cy">240</span></div>
+        <div class="slider-label"><span class="slider-name">c<sub>y</sub>  (principal point y)</span><span class="slider-val" id="v-cy">240</span></div>
         <input type="range" id="s-cy" min="60" max="420" value="240" step="5">
       </div>
       <div class="derived-note">
@@ -143,7 +139,7 @@
     </div>
 
     <div>
-      <div class="section-title">Extrinsics — Translation</div>
+      <div class="section-title">Extrinsics</div>
       <div class="slider-row">
         <div class="slider-label"><span class="slider-name">t<sub>x</sub></span><span class="slider-val" id="v-tx">0.0</span></div>
         <input type="range" id="s-tx" min="-5" max="5" value="0" step="0.1">
@@ -153,14 +149,10 @@
         <input type="range" id="s-ty" min="-5" max="5" value="0" step="0.1">
       </div>
       <div class="slider-row">
-        <div class="slider-label"><span class="slider-name">t<sub>z</sub>  (depth)</span><span class="slider-val" id="v-tz">6.0</span></div>
+        <div class="slider-label"><span class="slider-name">t<sub>z</sub></span><span class="slider-val" id="v-tz">6.0</span></div>
         <input type="range" id="s-tz" min="1" max="20" value="6" step="0.1">
       </div>
-    </div>
-
-    <div>
-      <div class="section-title">Extrinsics — Rotation (degrees)</div>
-      <div class="slider-row">
+      <div class="slider-row" style="margin-top:8px">
         <div class="slider-label"><span class="slider-name">R<sub>x</sub>  (tilt up/down)</span><span class="slider-val" id="v-rx">0</span></div>
         <input type="range" id="s-rx" min="-80" max="80" value="0" step="1">
       </div>
@@ -175,14 +167,15 @@
     </div>
 
     <div>
-      <div class="section-title">Camera Matrix K</div>
+      <div class="section-title">Camera Matrices</div>
       <div class="matrix-box" id="matrix-K"></div>
     </div>
 
     <div>
       <div class="section-title">Projection</div>
       <div class="equation-box">
-        [u,v,1]ᵀ <span style="font-size:1.3em;line-height:1">∝</span> <span class="eq-blue">K</span>[<span class="eq-green">R</span>|<span class="eq-green">t</span>][X,Y,Z,1]ᵀ<br>
+        [u,v,1]ᵀ <span style="font-size:1.3em;line-height:1">∝</span> <span class="eq-blue">K</span>[<span class="eq-blue">R</span>|<span class="eq-blue">t</span>][X,Y,Z,1]ᵀ<br>
+        [X',Y',Z']ᵀ = <span class="eq-blue">R</span>[X,Y,Z]ᵀ + <span class="eq-blue">t</span><br>
         u = <span class="eq-blue">f<sub>x</sub></span>·(X'/Z') + <span class="eq-blue">c<sub>x</sub></span><br>
         v = <span class="eq-blue">f<sub>y</sub></span>·(Y'/Z') + <span class="eq-blue">c<sub>y</sub></span>
       </div>
