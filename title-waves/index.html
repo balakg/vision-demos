@@ -906,8 +906,8 @@ document.getElementById('topTabTrending').addEventListener('click', () => setTop
 document.getElementById('trendSlider').addEventListener('input', renderTrending);
 const SORT_DESCS = {
   absolute: 'How many more papers contain this word compared to the previous year.',
-  share:    'Change in share of conference papers containing this word (accounts for conference growth).',
-  relative: 'How much the word count grew relative to its previous year count.',
+  share:    'How much more common this word became, relative to total papers that year (accounts for conference growth).',
+  relative: 'How much this word grew relative to its count in the previous year.',
 };
 
 function updateSortDesc() {
