@@ -852,7 +852,11 @@ function renderTrending() {
       const word  = document.createElement('span'); word.className  = 'trend-word';   word.textContent  = displayWord;
       const delta = document.createElement('span'); delta.className = `trend-change ${cls}`; delta.textContent = fmt(x);
       const cnts  = document.createElement('span'); cnts.className  = 'trend-counts'; cnts.textContent  = fmtCounts(x);
-      word.addEventListener('click', () => { setTopTab('search'); doSearch(displayWord); });
+      word.addEventListener('click', () => {
+        document.getElementById('yearSlider').value = document.getElementById('trendSlider').value;
+        setTopTab('search');
+        doSearch(displayWord);
+      });
       li.append(rank, word, delta, cnts);
       ul.appendChild(li);
     });
