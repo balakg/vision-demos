@@ -349,7 +349,7 @@ function getScene() {
 // CAMERA FRUSTUM (world view)
 // =============================================================
 function getFrustum() {
-  const RT=transp(getR()), C=camCenter(), d=2.5;
+  const RT=transp(getR()), C=camCenter(), d=P.f/200;
   const IW=getIW(), IH=getIH();
   const corners=[[0,0],[IW,0],[IW,IH],[0,IH]].map(([u,v])=>{
     const ray=mv(RT,[(u-P.cx)/getFx()*d,(v-P.cy)/getFy()*d,d]);
