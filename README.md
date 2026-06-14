@@ -1,5 +1,3 @@
-# Vision Demos
-
 Interactive demos for computer vision and image processing concepts. Built for teaching and exploration.
 
 | Demo | Description | Type | Link |
