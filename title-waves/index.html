@@ -250,6 +250,45 @@
       font-style: italic;
     }
 
+    .shared-controls { margin-bottom: 1rem; }
+
+    .top-tabs {
+      display: flex;
+      border-bottom: 1px solid #252538;
+      margin-bottom: 1.2rem;
+    }
+    .top-tab {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: #445;
+      padding: 0.5rem 1.2rem 0.55rem;
+      font-size: 0.9rem;
+      cursor: pointer;
+      margin-bottom: -1px;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .top-tab.active { color: #aaa; border-bottom-color: #aaa; }
+    .top-tab:not(.active):hover { color: #778; }
+
+    .trending-controls { margin-bottom: 1.2rem; }
+    .trend-cols { display: flex; gap: 2rem; margin-top: 0.5rem; }
+    .trend-col { flex: 1; min-width: 0; }
+    .trend-col-header {
+      font-size: 0.8rem; font-weight: 600;
+      margin-bottom: 0.6rem; padding-bottom: 0.35rem;
+      border-bottom: 1px solid #1c1c30;
+    }
+    .trend-up   { color: #a8d96e; }
+    .trend-down { color: #e05555; }
+    .trend-list { list-style: none; display: flex; flex-direction: column; gap: 0.28rem; }
+    .trend-item { display: flex; align-items: baseline; gap: 0.5rem; }
+    .trend-rank { color: #334; min-width: 1.4rem; text-align: right; font-size: 0.72rem; flex-shrink: 0; }
+    .trend-word { color: #778; cursor: pointer; flex: 1; font-size: 0.78rem; transition: color 0.15s; }
+    .trend-word:hover { color: #aab; }
+    .trend-change { font-family: monospace; font-size: 0.74rem; min-width: 4rem; text-align: right; flex-shrink: 0; }
+    .trend-counts { color: #334; font-size: 0.7rem; font-family: monospace; flex-shrink: 0; }
+
     .footer-note {
       text-align: center;
       font-size: 0.73rem;
@@ -267,62 +306,82 @@
   <h1>Title Waves</h1>
   <p class="subtitle">How often do words or phrases appear in major CV/ML conference paper titles over the years?</p>
 
-  <div class="controls">
-    <div class="search-row">
-      <input type="text" id="query" placeholder="e.g. diffusion" autocomplete="off" spellcheck="false">
-      <button id="searchBtn">Search</button>
+  <div class="shared-controls">
+    <div class="conf-group">
+      <label class="toggle-label cvpr-label"><input type="checkbox" id="cvpr" checked> CVPR</label>
+      <label class="toggle-label iccv-label"><input type="checkbox" id="iccv" checked> ICCV</label>
+      <label class="toggle-label neurips-label"><input type="checkbox" id="neurips" checked> NeurIPS</label>
     </div>
-    <div class="options-row">
-      <div class="conf-group">
-        <label class="toggle-label cvpr-label">
-          <input type="checkbox" id="cvpr" checked> CVPR
-        </label>
-        <label class="toggle-label iccv-label">
-          <input type="checkbox" id="iccv" checked> ICCV
-        </label>
-        <label class="toggle-label neurips-label">
-          <input type="checkbox" id="neurips" checked> NeurIPS
+  </div>
+
+  <div class="top-tabs">
+    <button class="top-tab active" id="topTabSearch">Search</button>
+    <button class="top-tab" id="topTabTrending">Trending</button>
+  </div>
+
+  <!-- ── Search panel ─────────────────────────────────────────── -->
+  <div id="searchPanel">
+    <div class="controls">
+      <div class="search-row">
+        <input type="text" id="query" placeholder="e.g. diffusion" autocomplete="off" spellcheck="false">
+        <button id="searchBtn">Search</button>
+      </div>
+      <div class="options-row">
+        <label class="toggle-label">
+          <input type="checkbox" id="normalize"> show as % of all papers
         </label>
       </div>
-      <div class="divider"></div>
-      <label class="toggle-label">
-        <input type="checkbox" id="normalize"> show as % of all papers
+    </div>
+
+    <p class="search-hint">Case-insensitive. Matches whole words by default — prefix with <code>*</code> (e.g. <code>*gan</code>) to match inside longer words such as "StyleGAN". Separate terms with commas to require all of them (e.g. <code>diffusion, video</code>).</p>
+
+    <div id="status"></div>
+
+    <div class="chart-wrap">
+      <canvas id="chart"></canvas>
+    </div>
+
+    <div class="year-panel" id="yearPanel">
+      <div class="slider-row">
+        <span class="slider-label">Browse year</span>
+        <button class="year-step-btn" id="yearPrev" title="Previous year">&#8249;</button>
+        <input type="range" id="yearSlider" min="2013" max="2026" step="1" value="2024">
+        <button class="year-step-btn" id="yearNext" title="Next year">&#8250;</button>
+        <span id="yearDisplay">2024</span>
+      </div>
+      <div class="tab-bar" id="tabBar"></div>
+      <div class="title-list-wrap" id="titleListWrap"></div>
+    </div>
+
+    <div class="examples">
+      <span>try:</span>
+      <button class="example-pill" data-q="diffusion">diffusion</button>
+      <button class="example-pill" data-q="transformer">transformer</button>
+      <button class="example-pill" data-q="GAN">GAN</button>
+      <button class="example-pill" data-q="*gan">*gan</button>
+      <button class="example-pill" data-q="3D gaussian">3D gaussian</button>
+      <button class="example-pill" data-q="self-supervised">self-supervised</button>
+      <button class="example-pill" data-q="attention">attention</button>
+      <button class="example-pill" data-q="neural radiance field">neural radiance field</button>
+      <button class="example-pill" data-q="diffusion, video">diffusion, video</button>
+    </div>
+  </div>
+
+  <!-- ── Trending panel ────────────────────────────────────────── -->
+  <div id="trendingPanel" style="display:none">
+    <div class="trending-controls">
+      <div class="slider-row">
+        <span class="slider-label">Year</span>
+        <button class="year-step-btn" id="trendPrev" title="Previous year">&#8249;</button>
+        <input type="range" id="trendSlider" min="2014" max="2026" step="1" value="2025">
+        <button class="year-step-btn" id="trendNext" title="Next year">&#8250;</button>
+        <span id="trendYearDisplay">2025</span>
+      </div>
+      <label class="toggle-label" style="margin-top:0.6rem">
+        <input type="checkbox" id="trendNormalize"> show as % of all papers
       </label>
     </div>
-  </div>
-
-  <p class="search-hint">Case-insensitive. Matches whole words by default — prefix with <code>*</code> (e.g. <code>*gan</code>) to match inside longer words such as "StyleGAN". Separate terms with commas to require all of them (e.g. <code>diffusion, video</code>).</p>
-
-  <div id="status"></div>
-
-  <div class="chart-wrap">
-    <canvas id="chart"></canvas>
-  </div>
-
-
-  <div class="year-panel" id="yearPanel">
-    <div class="slider-row">
-      <span class="slider-label">Browse year</span>
-      <button class="year-step-btn" id="yearPrev" title="Previous year">&#8249;</button>
-      <input type="range" id="yearSlider" min="2013" max="2026" step="1" value="2024">
-      <button class="year-step-btn" id="yearNext" title="Next year">&#8250;</button>
-      <span id="yearDisplay">2024</span>
-    </div>
-    <div class="tab-bar" id="tabBar"></div>
-    <div class="title-list-wrap" id="titleListWrap"></div>
-  </div>
-
-  <div class="examples">
-    <span>try:</span>
-    <button class="example-pill" data-q="diffusion">diffusion</button>
-    <button class="example-pill" data-q="transformer">transformer</button>
-    <button class="example-pill" data-q="GAN">GAN</button>
-    <button class="example-pill" data-q="*gan">*gan</button>
-    <button class="example-pill" data-q="3D gaussian">3D gaussian</button>
-    <button class="example-pill" data-q="self-supervised">self-supervised</button>
-    <button class="example-pill" data-q="attention">attention</button>
-    <button class="example-pill" data-q="neural radiance field">neural radiance field</button>
-    <button class="example-pill" data-q="diffusion, video">diffusion, video</button>
+    <div id="trendContent"></div>
   </div>
 
   <p class="footer-note">
@@ -630,6 +689,168 @@ document.getElementById('searchBtn').addEventListener('click', () => doSearch())
 document.getElementById('query').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
 document.querySelectorAll('.example-pill').forEach(btn => {
   btn.addEventListener('click', () => doSearch(btn.dataset.q));
+});
+
+// ── Trending tab ──────────────────────────────────────────────────────────────
+
+const STOP_WORDS = new Set([
+  'a','an','the','of','in','for','on','with','and','or','to','is','by','as','at',
+  'this','that','from','are','via','its','our','new','can','has','we','it','be',
+  'not','do','no','up','into','over','under','about','within','between',
+  'using','based','toward','towards','through','without','more',
+  'large','small','better','high','low','deep','fast','real','also','than',
+  'each','two','three','multi','joint','few','one','non','semi','pre','post',
+]);
+
+let _wordFreq = null;
+
+function buildWordFreq() {
+  if (_wordFreq) return;
+  loadDB();
+  _wordFreq = {};
+  for (const conf of Object.keys(_db)) {
+    _wordFreq[conf] = {};
+    for (const yr of Object.keys(_db[conf])) {
+      const titles = _db[conf][yr];
+      if (!titles) { _wordFreq[conf][yr] = null; continue; }
+      const counts = {};
+      for (const title of titles) {
+        const words = title.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/)
+          .filter(w => w.length > 2 && !STOP_WORDS.has(w));
+        for (const w of words) counts[w] = (counts[w] || 0) + 1;
+      }
+      _wordFreq[conf][yr] = counts;
+    }
+  }
+}
+
+function getTopChanges(year, confKeys, useNormalized) {
+  buildWordFreq();
+  const prevYear = String(year - 1);
+  const curYear  = String(year);
+
+  function aggregate(yr) {
+    const totals = {};
+    let paperTotal = 0;
+    for (const conf of confKeys) {
+      const freqMap = _wordFreq[conf]?.[yr];
+      if (!freqMap) continue;
+      paperTotal += _db[conf][yr]?.length ?? 0;
+      for (const [w, c] of Object.entries(freqMap)) totals[w] = (totals[w] || 0) + c;
+    }
+    return { totals, paperTotal };
+  }
+
+  const { totals: prev, paperTotal: prevTotal } = aggregate(prevYear);
+  const { totals: cur,  paperTotal: curTotal  } = aggregate(curYear);
+
+  const changes = [];
+  for (const w of new Set([...Object.keys(prev), ...Object.keys(cur)])) {
+    const c0 = prev[w] ?? 0, c1 = cur[w] ?? 0;
+    if (c1 < 5 && c0 < 5) continue;
+    const delta = useNormalized
+      ? (curTotal  > 0 ? c1 / curTotal  * 100 : 0) - (prevTotal > 0 ? c0 / prevTotal * 100 : 0)
+      : c1 - c0;
+    changes.push({ word: w, delta, c0, c1, prevTotal, curTotal });
+  }
+
+  const rising  = changes.filter(x => x.delta > 0).sort((a,b) => b.delta - a.delta).slice(0, 15);
+  const falling = changes.filter(x => x.delta < 0).sort((a,b) => a.delta - b.delta).slice(0, 15);
+  return { rising, falling };
+}
+
+function renderTrending() {
+  if (!_db) { try { loadDB(); } catch(e) { return; } }
+  const slider = document.getElementById('trendSlider');
+  const year = parseInt(slider.value);
+  document.getElementById('trendYearDisplay').textContent = year;
+  document.getElementById('trendPrev').disabled = slider.value === slider.min;
+  document.getElementById('trendNext').disabled = slider.value === slider.max;
+
+  const useNormalized = document.getElementById('trendNormalize').checked;
+  const confKeys = Object.values(VENUES).filter(v => document.getElementById(v.key).checked).map(v => v.key);
+  const content = document.getElementById('trendContent');
+
+  if (!confKeys.length) {
+    content.innerHTML = '<p class="no-data-note">Select at least one conference.</p>';
+    return;
+  }
+
+  const { rising, falling } = getTopChanges(year, confKeys, useNormalized);
+
+  function fmt(x) {
+    if (useNormalized) return `${x.delta > 0 ? '+' : ''}${x.delta.toFixed(2)}%`;
+    return `${x.delta > 0 ? '+' : ''}${x.delta}`;
+  }
+  function fmtCounts(x) {
+    if (useNormalized) {
+      const p0 = x.prevTotal > 0 ? (x.c0/x.prevTotal*100).toFixed(2) : '0.00';
+      const p1 = x.curTotal  > 0 ? (x.c1/x.curTotal *100).toFixed(2) : '0.00';
+      return `${p0}%→${p1}%`;
+    }
+    return `${x.c0}→${x.c1}`;
+  }
+
+  function buildList(items, cls) {
+    const ul = document.createElement('ul');
+    ul.className = 'trend-list';
+    items.forEach((x, i) => {
+      const li = document.createElement('li');
+      li.className = 'trend-item';
+      const rank  = document.createElement('span'); rank.className  = 'trend-rank';   rank.textContent  = `${i+1}.`;
+      const word  = document.createElement('span'); word.className  = 'trend-word';   word.textContent  = x.word;
+      const delta = document.createElement('span'); delta.className = `trend-change ${cls}`; delta.textContent = fmt(x);
+      const cnts  = document.createElement('span'); cnts.className  = 'trend-counts'; cnts.textContent  = fmtCounts(x);
+      word.addEventListener('click', () => { setTopTab('search'); doSearch(x.word); });
+      li.append(rank, word, delta, cnts);
+      ul.appendChild(li);
+    });
+    return ul;
+  }
+
+  content.innerHTML = `<div class="trend-cols">
+    <div class="trend-col">
+      <div class="trend-col-header trend-up">Rising ${year-1} → ${year}</div>
+      <div id="trendRisingList"></div>
+    </div>
+    <div class="trend-col">
+      <div class="trend-col-header trend-down">Falling ${year-1} → ${year}</div>
+      <div id="trendFallingList"></div>
+    </div>
+  </div>`;
+  document.getElementById('trendRisingList').appendChild(buildList(rising,  'trend-up'));
+  document.getElementById('trendFallingList').appendChild(buildList(falling, 'trend-down'));
+}
+
+let _activeTopTab = 'search';
+
+function setTopTab(tab) {
+  _activeTopTab = tab;
+  document.getElementById('searchPanel').style.display   = tab === 'search'   ? '' : 'none';
+  document.getElementById('trendingPanel').style.display = tab === 'trending' ? '' : 'none';
+  document.getElementById('topTabSearch').classList.toggle('active', tab === 'search');
+  document.getElementById('topTabTrending').classList.toggle('active', tab === 'trending');
+  if (tab === 'trending') renderTrending();
+}
+
+document.getElementById('topTabSearch').addEventListener('click', () => setTopTab('search'));
+document.getElementById('topTabTrending').addEventListener('click', () => setTopTab('trending'));
+document.getElementById('trendSlider').addEventListener('input', renderTrending);
+document.getElementById('trendNormalize').addEventListener('change', renderTrending);
+document.getElementById('trendPrev').addEventListener('click', () => {
+  const s = document.getElementById('trendSlider');
+  s.value = Math.max(parseInt(s.value) - 1, parseInt(s.min));
+  renderTrending();
+});
+document.getElementById('trendNext').addEventListener('click', () => {
+  const s = document.getElementById('trendSlider');
+  s.value = Math.min(parseInt(s.value) + 1, parseInt(s.max));
+  renderTrending();
+});
+['cvpr','iccv','neurips'].forEach(id => {
+  document.getElementById(id).addEventListener('change', () => {
+    if (_activeTopTab === 'trending') renderTrending();
+  });
 });
 
 initPlaceholder();
