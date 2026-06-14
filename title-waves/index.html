@@ -83,6 +83,8 @@
     .toggle-label input[type=checkbox] { accent-color: #5b9bd5; width: 14px; height: 14px; cursor: pointer; }
     .cvpr-label    { color: #5b9bd5; }
     .neurips-label { color: #e8824a; }
+    .iccv-label    { color: #5ec48a; }
+    .eccv-label    { color: #c47ed4; }
 
     .divider { width: 1px; height: 18px; background: #22223a; }
 
@@ -102,7 +104,7 @@
       border-radius: 10px;
       padding: 1.5rem 1.2rem 1rem;
     }
-    #chart { max-height: 390px; }
+    #chart { max-height: 390px; cursor: pointer; }
 
     .examples {
       display: flex;
@@ -185,22 +187,26 @@
     }
     .year-step-btn:hover:not(:disabled) { border-color: #4a4a7a; color: #9a9abb; }
     .year-step-btn:disabled { opacity: 0.25; cursor: default; }
-    .title-sections {
+    .tab-bar {
       display: flex;
-      gap: 1.5rem;
-      flex-wrap: wrap;
-    }
-    .title-section {
-      flex: 1;
-      min-width: 260px;
-    }
-    .title-section-header {
-      font-size: 0.8rem;
-      font-weight: 600;
-      margin-bottom: 0.55rem;
-      padding-bottom: 0.35rem;
+      gap: 0rem;
       border-bottom: 1px solid #1c1c30;
+      margin-bottom: 0.75rem;
     }
+    .tab-btn {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: #445;
+      padding: 0.3rem 0.9rem 0.45rem;
+      font-size: 0.8rem;
+      cursor: pointer;
+      margin-bottom: -1px;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .tab-btn.active { color: var(--conf-color); border-bottom-color: var(--conf-color); }
+    .tab-btn:not(.active):hover { color: #778; }
+    .title-list-wrap { min-height: 2rem; }
     .title-list {
       list-style: none;
       display: flex;
@@ -259,7 +265,7 @@
 <div class="container">
 
   <h1>Title Waves</h1>
-  <p class="subtitle">How often does a word or phrase appear in CVPR / NeurIPS paper titles over the years?</p>
+  <p class="subtitle">How often does a word or phrase appear in major CV/ML conference paper titles over the years?</p>
 
   <div class="controls">
     <div class="search-row">
@@ -270,6 +276,9 @@
       <div class="conf-group">
         <label class="toggle-label cvpr-label">
           <input type="checkbox" id="cvpr" checked> CVPR
+        </label>
+        <label class="toggle-label iccv-label">
+          <input type="checkbox" id="iccv" checked> ICCV
         </label>
         <label class="toggle-label neurips-label">
           <input type="checkbox" id="neurips" checked> NeurIPS
@@ -298,7 +307,8 @@
       <button class="year-step-btn" id="yearNext" title="Next year">&#8250;</button>
       <span id="yearDisplay">2024</span>
     </div>
-    <div class="title-sections" id="titleSections"></div>
+    <div class="tab-bar" id="tabBar"></div>
+    <div class="title-list-wrap" id="titleListWrap"></div>
   </div>
 
   <div class="examples">
@@ -314,8 +324,8 @@
   </div>
 
   <p class="footer-note">
-    Data from <a href="https://openaccess.thecvf.com" target="_blank">CVF Open Access</a> (CVPR) and
-    <a href="https://papers.nips.cc" target="_blank">papers.nips.cc</a> (NeurIPS) · 2013–2026 · NeurIPS 2026 not yet released  </p>
+    Data from <a href="https://openaccess.thecvf.com" target="_blank">CVF Open Access</a> (CVPR, ICCV) and
+    <a href="https://papers.nips.cc" target="_blank">papers.nips.cc</a> (NeurIPS) · 2013–2026 · NeurIPS 2026 not yet released</p>
 
 </div>
 <script>
@@ -323,6 +333,7 @@ const YEARS = Array.from({length: 14}, (_, i) => 2013 + i); // 2013-2026
 
 const VENUES = {
   cvpr:    { key: 'cvpr',    label: 'CVPR',    color: '#5b9bd5' },
+  iccv:    { key: 'iccv',    label: 'ICCV',    color: '#5ec48a', spanGaps: true },
   neurips: { key: 'neurips', label: 'NeurIPS', color: '#e8824a' },
 };
 
@@ -374,6 +385,7 @@ function countMatches(stemmedTitles, query) {
 }
 
 let _currentTerm = null;
+let _activeConf = null;
 
 function getMatchingTitles(conf, year, rawQuery) {
   const raw = rawQuery.toLowerCase().trim();
@@ -399,6 +411,39 @@ function sentenceCase(t) {
 
 const SHOW_LIMIT = 30;
 
+function renderPaperList(titles, nullMessage = 'Not yet available.') {
+  const wrap = document.getElementById('titleListWrap');
+  wrap.innerHTML = '';
+  if (titles === null) {
+    const p = document.createElement('p');
+    p.className = 'no-data-note'; p.textContent = nullMessage;
+    wrap.appendChild(p); return;
+  }
+  if (titles.length === 0) {
+    const p = document.createElement('p');
+    p.className = 'no-data-note'; p.textContent = 'No matches.';
+    wrap.appendChild(p); return;
+  }
+  const ul = document.createElement('ul');
+  ul.className = 'title-list';
+  titles.slice(0, SHOW_LIMIT).forEach(t => {
+    const li = document.createElement('li'); li.textContent = sentenceCase(t); ul.appendChild(li);
+  });
+  wrap.appendChild(ul);
+  if (titles.length > SHOW_LIMIT) {
+    const btn = document.createElement('button');
+    btn.className = 'show-more-btn';
+    btn.textContent = `Show all ${titles.length} →`;
+    btn.addEventListener('click', () => {
+      titles.slice(SHOW_LIMIT).forEach(t => {
+        const li = document.createElement('li'); li.textContent = sentenceCase(t); ul.appendChild(li);
+      });
+      btn.remove();
+    });
+    wrap.appendChild(btn);
+  }
+}
+
 function updateTitleList() {
   if (!_currentTerm) return;
   const slider = document.getElementById('yearSlider');
@@ -407,63 +452,32 @@ function updateTitleList() {
   document.getElementById('yearPrev').disabled = year === slider.min;
   document.getElementById('yearNext').disabled = year === slider.max;
 
-  const useCVPR    = document.getElementById('cvpr').checked;
-  const useNeurIPS = document.getElementById('neurips').checked;
-  const confs = [];
-  if (useCVPR)    confs.push({ key: 'cvpr',    label: 'CVPR',    color: '#5b9bd5' });
-  if (useNeurIPS) confs.push({ key: 'neurips', label: 'NeurIPS', color: '#e8824a' });
+  const confs = Object.values(VENUES).filter(v => document.getElementById(v.key).checked);
+  if (!confs.length) return;
+  if (!confs.find(c => c.key === _activeConf)) _activeConf = confs[0].key;
 
-  const container = document.getElementById('titleSections');
-  container.innerHTML = '';
-
-  for (const conf of confs) {
+  const tabBar = document.getElementById('tabBar');
+  tabBar.innerHTML = '';
+  confs.forEach(conf => {
     const titles = getMatchingTitles(conf.key, year, _currentTerm);
-    const sec = document.createElement('div');
-    sec.className = 'title-section';
+    const count = titles === null ? '—' : titles.length;
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn' + (conf.key === _activeConf ? ' active' : '');
+    btn.style.setProperty('--conf-color', conf.color);
+    btn.textContent = `${conf.label} (${count})`;
+    btn.addEventListener('click', () => { _activeConf = conf.key; updateTitleList(); });
+    tabBar.appendChild(btn);
+  });
 
-    const hdr = document.createElement('div');
-    hdr.className = 'title-section-header';
-    hdr.style.color = conf.color;
-
-    if (titles === null) {
-      hdr.textContent = `${conf.label} ${year}`;
-      sec.appendChild(hdr);
-      const note = document.createElement('p');
-      note.className = 'no-data-note';
-      note.textContent = 'Not yet available.';
-      sec.appendChild(note);
-    } else {
-      hdr.textContent = `${conf.label} ${year} · ${titles.length} match${titles.length !== 1 ? 'es' : ''}`;
-      sec.appendChild(hdr);
-      const visible = titles.slice(0, SHOW_LIMIT);
-      const ul = document.createElement('ul');
-      ul.className = 'title-list';
-      visible.forEach(t => {
-        const li = document.createElement('li');
-        li.textContent = sentenceCase(t);
-        ul.appendChild(li);
-      });
-      sec.appendChild(ul);
-      if (titles.length > SHOW_LIMIT) {
-        const btn = document.createElement('button');
-        btn.className = 'show-more-btn';
-        btn.textContent = `Show all ${titles.length} →`;
-        btn.addEventListener('click', () => {
-          titles.slice(SHOW_LIMIT).forEach(t => {
-            const li = document.createElement('li');
-            li.textContent = sentenceCase(t);
-            ul.appendChild(li);
-          });
-          btn.remove();
-        });
-        sec.appendChild(btn);
-      }
-    }
-    container.appendChild(sec);
-  }
+  const active = confs.find(c => c.key === _activeConf);
+  const nullMsg = (active.key === 'iccv' && year % 2 === 0)
+    ? 'ICCV is held in odd years.'
+    : 'Not yet available.';
+  renderPaperList(getMatchingTitles(active.key, year, _currentTerm), nullMsg);
 }
 
 let chart = null;
+let _chartVenues = [];
 
 function setStatus(msg, cls = '') {
   const el = document.getElementById('status');
@@ -475,20 +489,16 @@ async function doSearch(term) {
   term = (term || document.getElementById('query').value).trim();
   if (!term) { setStatus('Enter a word or phrase.', 'error'); return; }
 
-  const useCVPR    = document.getElementById('cvpr').checked;
-  const useNeurIPS = document.getElementById('neurips').checked;
   const normalize  = document.getElementById('normalize').checked;
+  const selected = Object.values(VENUES).filter(v => document.getElementById(v.key).checked);
 
-  if (!useCVPR && !useNeurIPS) { setStatus('Select at least one conference.', 'error'); return; }
+  if (!selected.length) { setStatus('Select at least one conference.', 'error'); return; }
 
   document.getElementById('query').value = term;
   document.getElementById('searchBtn').disabled = true;
 
   try {
     const { db, stemmed } = loadDB();
-    const selected = [];
-    if (useCVPR)    selected.push(VENUES.cvpr);
-    if (useNeurIPS) selected.push(VENUES.neurips);
 
     const datasets = selected.map(venue => {
       const values = YEARS.map(y => {
@@ -511,11 +521,12 @@ async function doSearch(term) {
         tension: 0.35,
         pointRadius: 4,
         pointHoverRadius: 7,
+        spanGaps: venue.spanGaps ?? false,
         fill: false,
       };
     });
 
-    renderChart(datasets, term, normalize);
+    renderChart(datasets, selected, term, normalize);
     _currentTerm = term;
     document.getElementById('yearPanel').style.display = 'block';
     updateTitleList();
@@ -527,7 +538,8 @@ async function doSearch(term) {
   }
 }
 
-function renderChart(datasets, term, normalize) {
+function renderChart(datasets, venues, term, normalize) {
+  _chartVenues = venues;
   if (chart) chart.destroy();
   const ctx = document.getElementById('chart').getContext('2d');
 
@@ -537,6 +549,16 @@ function renderChart(datasets, term, normalize) {
     options: {
       responsive: true,
       interaction: { mode: 'index', intersect: false },
+      onClick: (e) => {
+        const nearest = chart.getElementsAtEventForMode(e.native, 'nearest', { intersect: false }, false);
+        if (!nearest.length) return;
+        const { datasetIndex, index } = nearest[0];
+        const slider = document.getElementById('yearSlider');
+        slider.value = YEARS[index];
+        if (_chartVenues[datasetIndex]) _activeConf = _chartVenues[datasetIndex].key;
+        document.getElementById('yearPanel').style.display = 'block';
+        updateTitleList();
+      },
       plugins: {
         legend: {
           display: datasets.length > 1,

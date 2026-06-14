@@ -34,7 +34,7 @@ def fetch(url, retries=3):
                 print(f"  FAILED: {url} — {e}", file=sys.stderr)
                 return None
 
-# ── CVF / CVPR ────────────────────────────────────────────────────────────────
+# ── CVF (CVPR / ICCV / ECCV) ─────────────────────────────────────────────────
 
 class CVFParser(HTMLParser):
     def __init__(self):
@@ -48,19 +48,19 @@ class CVFParser(HTMLParser):
     def handle_data(self, data):
         if self._in and data.strip(): self.titles.append(data.strip())
 
-def scrape_cvpr(year):
-    base = f"https://openaccess.thecvf.com/CVPR{year}"
+def scrape_cvf(conf_name, year):
+    base = f"https://openaccess.thecvf.com/{conf_name}{year}"
     html = fetch(base + "?day=all")
     p = CVFParser()
     if html: p.feed(html)
     if p.titles:
-        print(f"  CVPR {year}: {len(p.titles)} papers"); return p.titles
+        print(f"  {conf_name} {year}: {len(p.titles)} papers"); return p.titles
     html_main = fetch(base)
     titles = []
     if html_main:
         days = sorted(set(re.findall(r'day=(\d{4}-\d{2}-\d{2})', html_main)))
         if days:
-            print(f"  CVPR {year}: fetching {len(days)} day pages")
+            print(f"  {conf_name} {year}: fetching {len(days)} day pages")
             for day in days:
                 dh = fetch(f"{base}?day={day}")
                 if dh:
@@ -68,7 +68,17 @@ def scrape_cvpr(year):
                 time.sleep(0.3)
         else:
             p2 = CVFParser(); p2.feed(html_main); titles = p2.titles
-    print(f"  CVPR {year}: {len(titles)} papers"); return titles
+    print(f"  {conf_name} {year}: {len(titles)} papers"); return titles
+
+def scrape_cvpr(year): return scrape_cvf("CVPR", year)
+
+def scrape_iccv(year):
+    if year % 2 == 0: return None  # ICCV held in odd years only
+    return scrape_cvf("ICCV", year)
+
+def scrape_eccv(year):
+    if year % 2 != 0 or year < 2018: return None  # ECCV held in even years; CVF from 2018
+    return scrape_cvf("ECCV", year)
 
 # ── NeurIPS ───────────────────────────────────────────────────────────────────
 
@@ -108,9 +118,11 @@ else:
 if args and os.path.exists(JSON_OUT):
     with open(JSON_OUT) as f:
         data = json.load(f)
+    for conf in ["cvpr", "neurips", "iccv", "eccv"]:
+        if conf not in data: data[conf] = {}
     print(f"Loaded existing data, updating years: {years}")
 else:
-    data = {"cvpr": {}, "neurips": {}}
+    data = {"cvpr": {}, "neurips": {}, "iccv": {}, "eccv": {}}
     print(f"Full rebuild for years: {years}")
 
 print("\n=== CVPR ===")
@@ -123,6 +135,26 @@ print("\n=== NeurIPS ===")
 for year in years:
     titles = scrape_neurips(year)
     data["neurips"][str(year)] = [t.lower() for t in titles] if titles else None
+    time.sleep(0.5)
+
+print("\n=== ICCV ===")
+for year in years:
+    titles = scrape_iccv(year)
+    if titles is None:
+        data["iccv"][str(year)] = None
+        if year % 2 == 0: print(f"  ICCV {year}: not held (even year)")
+    else:
+        data["iccv"][str(year)] = [t.lower() for t in titles]
+    time.sleep(0.5)
+
+print("\n=== ECCV ===")
+for year in years:
+    titles = scrape_eccv(year)
+    if titles is None:
+        data["eccv"][str(year)] = None
+        if year % 2 != 0 or year < 2018: print(f"  ECCV {year}: not held / not on CVF")
+    else:
+        data["eccv"][str(year)] = [t.lower() for t in titles]
     time.sleep(0.5)
 
 print("\n=== Paper counts ===")
